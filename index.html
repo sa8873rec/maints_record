@@ -1,223 +1,209 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cleaning Record</title>
-  <link rel="preconnect" href="https://api.fontshare.com" />
-  <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
+
   <style>
-    :root,[data-theme="light"]{
-      --bg:#f7f6f2;--surface:#f9f8f5;--surface2:#fbfbf9;--offset:#f3f0ec;--border:#d4d1ca;--divider:#dcd9d5;
-      --text:#28251d;--muted:#6f6d67;--inverse:#f9f8f4;--primary:#01696f;--primaryHover:#0c4e54;--primaryTint:#cedcd8;
-      --r-md:.65rem;--r-lg:.9rem;--r-xl:1.2rem;
-      --s3:.75rem;--s4:1rem;--s5:1.25rem;--s6:1.5rem;--s8:2rem;--s12:3rem;
-      --t-xs:clamp(.75rem,.7rem + .2vw,.875rem);--t-sm:clamp(.875rem,.82rem + .2vw,1rem);
-      --t-base:clamp(1rem,.95rem + .2vw,1.1rem);--t-lg:clamp(1.125rem,1rem + .7vw,1.4rem);
-      --shadow:0 10px 30px rgb(40 37 29 / .08);--font:'General Sans',system-ui,sans-serif
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      font-family: Arial, Helvetica, sans-serif;
     }
-    [data-theme="dark"]{
-      --bg:#171614;--surface:#1c1b19;--surface2:#201f1d;--offset:#1d1c1a;--border:#393836;--divider:#262523;
-      --text:#cdccca;--muted:#9b9893;--inverse:#171614;--primary:#4f98a3;--primaryHover:#227f8b;--primaryTint:#313b3b;
-      --shadow:0 10px 30px rgb(0 0 0 / .25)
+
+    body {
+      margin: 0;
+      background: #111;
+      color: #000;
     }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{min-height:100dvh;background:var(--bg);color:var(--text);font:var(--t-base)/1.55 var(--font)}
-    button,input{font:inherit;color:inherit}
-    img{max-width:100%;display:block}
-    .container{max-width:1100px;margin:0 auto;padding:0 var(--s4)}
-    .topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--divider)}
-    .topbar-inner{display:flex;justify-content:space-between;align-items:center;padding:var(--s4) 0}
-    .brand{display:flex;align-items:center;gap:var(--s3);font-weight:700}
-    .logo{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:var(--primaryTint);color:var(--primary)}
-    .logo svg{width:20px;height:20px}
-    .theme-toggle{width:44px;height:44px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}
-    .workspace{padding:var(--s8) 0 var(--s12)}
-    .app-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s6);align-items:start}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow)}
-    .card-head{padding:var(--s5);border-bottom:1px solid var(--divider)}
-    .card-body{padding:var(--s5)}
-    .section-label{font-size:var(--t-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:var(--s4)}
-    .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
-    .field{display:flex;flex-direction:column;gap:.45rem}
-    .field.full{grid-column:1/-1}
-    label{font-size:var(--t-sm);font-weight:600}
-    input[type="text"],input[type="file"]{width:100%;min-height:48px;padding:.85rem .95rem;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface2)}
-    .dropzone{padding:var(--s5);border:1px dashed var(--border);border-radius:var(--r-lg);background:var(--surface2)}
-    .preview-shell{display:grid;gap:var(--s4);margin-top:var(--s4)}
-    .image-frame{aspect-ratio:16/10;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:var(--offset);display:grid;place-items:center}
-    .image-frame.empty::before{content:'Uploaded image preview';font-size:var(--t-sm);color:var(--muted)}
-    .image-frame img{width:100%;height:100%;object-fit:contain;background:#00000008}
-    .actions{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s5)}
-    .btn{min-height:46px;padding:.82rem 1.05rem;border-radius:var(--r-md);border:1px solid transparent;font-weight:600}
-    .btn-primary{background:var(--primary);color:var(--inverse)}
-    .btn-primary:hover{background:var(--primaryHover)}
-    .btn-ghost{background:transparent;border-color:var(--border)}
-    .notice{margin-top:var(--s4);padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--surface2);border:1px solid var(--border);font-size:var(--t-sm);color:var(--muted)}
-    .table-wrap{overflow:auto}
-    table{width:100%;min-width:760px;border-collapse:collapse}
-    th,td{padding:.85rem .75rem;border-bottom:1px solid var(--divider);text-align:left;white-space:nowrap}
-    th{font-size:var(--t-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-    td input{min-height:40px;padding:.55rem .65rem}
-    .footer-note{padding:var(--s4) var(--s5);border-top:1px solid var(--divider);font-size:var(--t-sm);color:var(--muted)}
-    .muted{color:var(--muted)}
-    @media (max-width:940px){.app-grid,.field-grid{grid-template-columns:1fr}}
+
+    .app-shell {
+      padding: 24px;
+    }
+
+    .form-card,
+    .preview-card {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .pdf-sheet {
+      display: none;
+      background: #fff;
+      color: #000;
+      padding: 24px;
+    }
+
+    .pdf-title {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .pdf-company {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .pdf-meta {
+      font-size: 14px;
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+
+    .pdf-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .pdf-table th,
+    .pdf-table td {
+      border: 1px solid #000;
+      padding: 6px 8px;
+      vertical-align: middle;
+      text-align: left;
+    }
+
+    .pdf-table th {
+      background: #eee;
+      font-weight: 700;
+    }
+
+    .preview-table-wrap {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    .main-layout {
+      display: block;
+    }
+
+    .export-btn {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 9999;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 10px;
+      background: #58a6b3;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3);
+    }
+
+    @media print {
+      body {
+        background: #fff !important;
+      }
+
+      .form-card,
+      .preview-card,
+      .export-btn {
+        display: none !important;
+      }
+
+      .pdf-sheet {
+        display: block !important;
+      }
+
+      .app-shell {
+        padding: 0;
+      }
+
+      @page {
+        size: A4;
+        margin: 12mm;
+      }
+    }
   </style>
 </head>
+
 <body>
-  <header class="topbar">
-    <div class="container topbar-inner">
-      <div class="brand">
-        <div class="logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 17V7h8"/><path d="M10 17V10h8"/><path d="M14 17v-4h4"/>
-          </svg>
-        </div>
-        <span>Cleaning Record</span>
-      </div>
-      <button class="theme-toggle" data-theme-toggle aria-label="Switch theme"></button>
-    </div>
-  </header>
-
-  <main class="container">
-    <section class="workspace">
-      <div class="app-grid">
-        <section class="card">
-          <div class="card-head">
-            <h2 style="font-size:var(--t-lg)">Form</h2>
-          </div>
-          <div class="card-body">
-            <div class="section-label">Basic Information</div>
-            <div class="field-grid">
-              <div class="field">
-                <label for="docTitle">Title</label>
-                <input id="docTitle" type="text" value="Annual Cleaning Record" />
-              </div>
-              <div class="field">
-                <label for="projectName">Project Name</label>
-                <input id="projectName" type="text" placeholder="e.g. Club House FCU Cleaning" />
-              </div>
-              <div class="field">
-                <label for="location">Location</label>
-                <input id="location" type="text" placeholder="e.g. Happy Valley" />
-              </div>
-              <div class="field full">
-                <label for="period">Cleaning Period</label>
-                <input id="period" type="text" placeholder="e.g. 16-3-2026 to 2-4-2026" />
-              </div>
-            </div>
-
-            <div class="section-label" style="margin-top:1.5rem">Image Upload</div>
-            <div class="dropzone">
-              <div class="field full">
-                <label for="imageInput">Upload image</label>
-                <input id="imageInput" type="file" accept="image/*" />
-              </div>
-              <div class="preview-shell">
-                <div class="image-frame empty" id="previewFrame"></div>
-                <p class="muted" style="font-size:var(--t-sm)">Use a clear screenshot showing IC, QJ, TH1, TH2, TH3, TH4, Mode, and IC S.</p>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button type="button" class="btn btn-primary" id="ocrBtn">Preview OCR</button>
-              <button type="button" class="btn btn-ghost" id="resetBtn">Reset preview</button>
-            </div>
-            <div class="notice" id="noticeBox">Status: waiting for image upload.</div>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2 style="font-size:var(--t-lg)">Data Preview</h2>
-          </div>
-          <div class="card-body table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>IC No.</th>
-                  <th>QJ</th>
-                  <th>TH1</th>
-                  <th>TH2</th>
-                  <th>TH3</th>
-                  <th>TH4</th>
-                  <th>Mode</th>
-                  <th>IC S</th>
-                </tr>
-              </thead>
-              <tbody id="ocrTableBody">
-                <tr><td><input value="001"></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td></tr>
-                <tr><td><input value="002"></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td></tr>
-                <tr><td><input value="003"></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="footer-note">Preview only. OCR result can be checked here before exporting to Excel.</div>
-        </section>
-      </div>
+  <div class="app-shell">
+    <section class="form-card">
+      <h2>Form</h2>
+      <!-- 你原本的 form 內容放呢度 -->
     </section>
-  </main>
+
+    <section class="preview-card">
+      <h2>Preview</h2>
+      <!-- 你原本的 preview 內容放呢度 -->
+    </section>
+
+    <section class="pdf-sheet" id="pdfSheet">
+      <div class="pdf-company">REC Engineering Contracting Company Limited</div>
+      <div class="pdf-title">Annual Cleaning Record</div>
+
+      <div class="pdf-meta">
+        <div>Project Name :</div>
+        <div>Location :</div>
+        <div>Cleaning Period :</div>
+      </div>
+
+      <table class="pdf-table">
+        <thead>
+          <tr>
+            <th>IC No.</th>
+            <th>Cooling Capacity(kW)</th>
+            <th>Cooling Air Supply Temperature℃ (TH3)</th>
+            <th>Cooling Air Supply Temperature℃ (TH4)</th>
+            <th>Cooling Air Return Temperature℃ (TH1)</th>
+            <th>Pipe Outlet Temperature℃ (TH2)</th>
+            <th>AC Mode</th>
+            <th>IC Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>001</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>002</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>003</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <button class="export-btn" onclick="exportPdf()">Export PDF</button>
 
   <script>
-    const previewFrame = document.getElementById('previewFrame');
-    const imageInput = document.getElementById('imageInput');
-    const noticeBox = document.getElementById('noticeBox');
-    const docTitle = document.getElementById('docTitle');
-    const ocrBtn = document.getElementById('ocrBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const rows = Array.from(document.querySelectorAll('#ocrTableBody tr'));
-
-    const sampleData = [
-      ['001','13','23.2','8.7','8.3','8.3','Cooling','Cool ON'],
-      ['002','13','26.8','8.7','9.1','12.3','Cooling','Cool ON'],
-      ['003','13','25.6','8.7','8.3','9.1','Cooling','Cool ON']
-    ];
-
-    imageInput.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      previewFrame.classList.remove('empty');
-      previewFrame.innerHTML = `<img src="${url}" alt="Uploaded operation screenshot preview">`;
-      noticeBox.textContent = 'Status: image uploaded. Click "Preview OCR" to simulate extraction.';
-    });
-
-    ocrBtn.addEventListener('click', () => {
-      sampleData.forEach((row, i) => {
-        const inputs = rows[i].querySelectorAll('input');
-        row.forEach((value, j) => inputs[j].value = value);
-      });
-      noticeBox.textContent = `Status: OCR preview ready for "${docTitle.value || 'Annual Cleaning Record'}".`;
-    });
-
-    resetBtn.addEventListener('click', () => {
-      rows.forEach((tr, i) => {
-        const inputs = tr.querySelectorAll('input');
-        inputs.forEach((input, idx) => input.value = idx === 0 ? String(i + 1).padStart(3,'0') : '');
-      });
-      previewFrame.className = 'image-frame empty';
-      previewFrame.innerHTML = '';
-      imageInput.value = '';
-      docTitle.value = 'Annual Cleaning Record';
-      noticeBox.textContent = 'Status: reset complete. Waiting for image upload.';
-    });
-
-    (function () {
-      const t = document.querySelector('[data-theme-toggle]');
-      const r = document.documentElement;
-      let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
-      const render = () => {
-        r.setAttribute('data-theme', d);
-        t.innerHTML = d === 'dark'
-          ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-          : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-      };
-      render();
-      t.addEventListener('click', () => {
-        d = d === 'dark' ? 'light' : 'dark';
-        render();
-      });
-    })();
+    function exportPdf() {
+      window.print();
+    }
   </script>
 </body>
 </html>
