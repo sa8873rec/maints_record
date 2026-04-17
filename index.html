@@ -4,12 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cleaning Record</title>
-
   <style>
-    :root{
-      --bg:#f5f7fa;--card:#ffffff;--line:#d9dee7;--text:#1f2937;--muted:#6b7280;--primary:#0f766e;--primary2:#0b5f59;
-      --radius:12px;--shadow:0 8px 24px rgba(15,23,42,.06);
-    }
+    :root{--bg:#f5f7fa;--card:#fff;--line:#d9dee7;--text:#1f2937;--muted:#6b7280;--primary:#0f766e;--primary2:#0b5f59;--radius:12px;--shadow:0 8px 24px rgba(15,23,42,.06)}
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.45}
     .wrap{max-width:1180px;margin:0 auto;padding:24px}
@@ -23,145 +19,111 @@
     .field{display:flex;flex-direction:column;gap:8px}
     .field.full{grid-column:1 / -1}
     label{font-size:14px;font-weight:700}
-    input[type="text"], input[type="file"]{
-      width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:14px
-    }
-    .upload-box{border:1px dashed var(--line);border-radius:10px;padding:14px;background:#fafafa}
-    .btn-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
-    .btn{
-      border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px
-    }
-    .btn-primary{background:var(--primary);color:#fff}
-    .btn-primary:hover{background:var(--primary2)}
-    .btn-secondary{background:#e5e7eb;color:#111827}
-    .preview-wrap{overflow-x:auto;width:100%}
-    .preview-table{width:100%;min-width:980px;border-collapse:collapse;font-size:14px}
-    .preview-table th,.preview-table td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:middle}
-    .preview-table th{background:#f3f4f6}
-    .preview-input{
-      width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px
-    }
-
-    .pdf-sheet{display:none;background:#fff;color:#000;padding:24px}
+    input[type="text"],input[type="file"]{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#fff}
+    .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+    button{border:none;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:700;cursor:pointer}
+    .primary{background:var(--primary);color:#fff}.primary:hover{background:var(--primary2)}
+    .ghost{background:#fff;border:1px solid var(--line);color:var(--text)}
+    .note{margin-top:14px;padding:12px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;font-size:14px;color:var(--muted)}
+    .preview{margin-top:16px;border:1px dashed var(--line);border-radius:10px;background:#fafafa;min-height:220px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .preview.empty{color:var(--muted);font-size:14px}
+    .preview img{max-width:100%;max-height:420px;display:block}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;min-width:900px;border-collapse:collapse}
+    th,td{border:1px solid var(--line);padding:10px;text-align:left}
+    th{background:#f8fafc;font-size:13px}
+    td input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px}
+    .export-bar{display:flex;justify-content:flex-end;margin-top:10px}
+    .export-btn{padding:14px 22px;min-width:160px;font-size:16px;background:#58a6b3;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.22)}
+    .pdf-sheet{display:none;background:#fff;color:#000;padding:24px;font-family:Arial,sans-serif}
     .pdf-company{text-align:left;font-size:14px;font-weight:700;margin-bottom:8px}
     .pdf-title{text-align:center;font-size:20px;font-weight:700;margin-bottom:14px}
     .pdf-meta{font-size:14px;margin-bottom:14px;line-height:1.7}
     .pdf-table{width:100%;border-collapse:collapse;font-size:12px}
     .pdf-table th,.pdf-table td{border:1px solid #000;padding:6px 8px;vertical-align:middle;text-align:left}
     .pdf-table th{background:#eee;font-weight:700}
-
-    .export-btn{
-      position:fixed;right:18px;bottom:18px;z-index:9999;padding:12px 16px;border:0;border-radius:10px;
-      background:#58a6b3;color:#fff;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.3)
-    }
-
-    @media print {
-      body{background:#fff !important}
-      .card,.export-btn{display:none !important}
-      .pdf-sheet{display:block !important}
-      @page{size:A4;margin:12mm}
-    }
+    @media (max-width:900px){.grid{grid-template-columns:1fr}.wrap{padding:14px}.card-head{font-size:18px}.export-bar{justify-content:stretch}.export-btn{width:100%}}
+    @media print{.card,.export-bar{display:none !important}.pdf-sheet{display:block !important}@page{size:A4;margin:12mm}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="header">
       <h1>Cleaning Record</h1>
-      <p>Fill in the form, preview the data, then export as PDF.</p>
+      <p>Fill in the basic information, upload image, then preview OCR data.</p>
     </div>
 
     <section class="card">
-      <div class="card-head">Form</div>
+      <div class="card-head">Basic Information</div>
       <div class="card-body">
         <div class="grid">
           <div class="field">
-            <label>Title</label>
-            <input type="text" id="title" placeholder="Ann">
+            <label for="docTitle">Title</label>
+            <input id="docTitle" type="text" value="Annual Cleaning Record" />
           </div>
           <div class="field">
-            <label>Project Name</label>
-            <input type="text" id="projectName" placeholder="e.g. Pao Ma Di Ma Chang">
+            <label for="projectName">Project Name</label>
+            <input id="projectName" type="text" placeholder="e.g. Club House FCU Cleaning" />
           </div>
           <div class="field">
-            <label>Location</label>
-            <input type="text" id="location" placeholder="e.g. Hong Kong">
+            <label for="location">Location</label>
+            <input id="location" type="text" placeholder="e.g. Happy Valley" />
           </div>
           <div class="field">
-            <label>Cleaning Period</label>
-            <input type="text" id="cleaningPeriod" placeholder="e.g. 16-3-2026">
+            <label for="period">Cleaning Period</label>
+            <input id="period" type="text" placeholder="e.g. 16-3-2026 to 2-4-2026" />
           </div>
           <div class="field full">
-            <label>Image Upload</label>
-            <div class="upload-box">
-              <input type="file" id="imageUpload" accept="image/*">
-            </div>
+            <label for="imageInput">Upload image</label>
+            <input id="imageInput" type="file" accept="image/*" />
           </div>
         </div>
+        <div class="preview empty" id="previewFrame">Uploaded image preview</div>
+        <div class="actions">
+          <button type="button" class="primary" id="ocrBtn">Preview OCR</button>
+          <button type="button" class="ghost" id="resetBtn">Reset</button>
+        </div>
+        <div class="note" id="noticeBox">Status: waiting for image upload.</div>
       </div>
     </section>
 
     <section class="card">
-      <div class="card-head">Preview</div>
-      <div class="card-body">
-        <div class="preview-wrap">
-          <table class="preview-table">
-            <thead>
-              <tr>
-                <th>IC No.</th>
-                <th>QJ</th>
-                <th>TH1</th>
-                <th>TH2</th>
-                <th>TH3</th>
-                <th>TH4</th>
-                <th>AC Mode</th>
-                <th>IC Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>001</td>
-                <td><input class="preview-input" type="text" value="13"></td>
-                <td><input class="preview-input" type="text" value="23.2"></td>
-                <td><input class="preview-input" type="text" value="8.7"></td>
-                <td><input class="preview-input" type="text" value="8.3"></td>
-                <td><input class="preview-input" type="text" value="8.3"></td>
-                <td><input class="preview-input" type="text" value="Cooling"></td>
-                <td><input class="preview-input" type="text" value="Cool ON"></td>
-              </tr>
-              <tr>
-                <td>002</td>
-                <td><input class="preview-input" type="text" value="13"></td>
-                <td><input class="preview-input" type="text" value="26.8"></td>
-                <td><input class="preview-input" type="text" value="8.7"></td>
-                <td><input class="preview-input" type="text" value="9.1"></td>
-                <td><input class="preview-input" type="text" value="12.3"></td>
-                <td><input class="preview-input" type="text" value="Cooling"></td>
-                <td><input class="preview-input" type="text" value="Cool ON"></td>
-              </tr>
-              <tr>
-                <td>003</td>
-                <td><input class="preview-input" type="text" value="13"></td>
-                <td><input class="preview-input" type="text" value="25.6"></td>
-                <td><input class="preview-input" type="text" value="8.7"></td>
-                <td><input class="preview-input" type="text" value="8.3"></td>
-                <td><input class="preview-input" type="text" value="9.1"></td>
-                <td><input class="preview-input" type="text" value="Cooling"></td>
-                <td><input class="preview-input" type="text" value="Cool ON"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="card-head">Data Preview</div>
+      <div class="card-body table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>IC No.</th>
+              <th>QJ</th>
+              <th>TH1</th>
+              <th>TH2</th>
+              <th>TH3</th>
+              <th>TH4</th>
+              <th>Mode</th>
+              <th>IC S</th>
+            </tr>
+          </thead>
+          <tbody id="ocrTableBody">
+            <tr><td><input value="001"></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td></tr>
+            <tr><td><input value="002"></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td></tr>
+            <tr><td><input value="003"></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td><td><input value=""></td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
+
+    <div class="export-bar">
+      <button class="export-btn" id="exportPdfBtn" onclick="exportPdf()">Export PDF</button>
+    </div>
 
     <section class="pdf-sheet" id="pdfSheet">
       <div class="pdf-company">REC Engineering Contracting Company Limited</div>
       <div class="pdf-title">Annual Cleaning Record</div>
       <div class="pdf-meta">
-        <div>Title :</div>
-        <div>Project Name :</div>
-        <div>Location :</div>
-        <div>Cleaning Period :</div>
+        <div>Title : <span id="pdfTitle"></span></div>
+        <div>Project Name : <span id="pdfProject"></span></div>
+        <div>Location : <span id="pdfLocation"></span></div>
+        <div>Cleaning Period : <span id="pdfPeriod"></span></div>
       </div>
       <table class="pdf-table">
         <thead>
@@ -176,7 +138,7 @@
             <th>IC Status</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="pdfBody">
           <tr><td>001</td><td>13</td><td>8.3</td><td>8.3</td><td>23.2</td><td>8.7</td><td>Cooling</td><td>Cool ON</td></tr>
           <tr><td>002</td><td>13</td><td>9.1</td><td>12.3</td><td>26.8</td><td>8.7</td><td>Cooling</td><td>Cool ON</td></tr>
           <tr><td>003</td><td>13</td><td>8.3</td><td>9.1</td><td>25.6</td><td>8.7</td><td>Cooling</td><td>Cool ON</td></tr>
@@ -185,11 +147,75 @@
     </section>
   </div>
 
-  <button class="export-btn" onclick="exportPdf()">Export PDF</button>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
+    const previewFrame = document.getElementById('previewFrame');
+    const imageInput = document.getElementById('imageInput');
+    const noticeBox = document.getElementById('noticeBox');
+    const docTitle = document.getElementById('docTitle');
+    const projectName = document.getElementById('projectName');
+    const locationInput = document.getElementById('location');
+    const periodInput = document.getElementById('period');
+    const ocrBtn = document.getElementById('ocrBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const rows = Array.from(document.querySelectorAll('#ocrTableBody tr'));
+
+    const sampleData = [
+      ['001','13','23.2','8.7','8.3','8.3','Cooling','Cool ON'],
+      ['002','13','26.8','8.7','9.1','12.3','Cooling','Cool ON'],
+      ['003','13','25.6','8.7','8.3','9.1','Cooling','Cool ON']
+    ];
+
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      previewFrame.classList.remove('empty');
+      previewFrame.innerHTML = `<img src="${url}" alt="Uploaded image">`;
+      noticeBox.textContent = 'Status: image uploaded. Click Preview OCR.';
+    });
+
+    ocrBtn.addEventListener('click', () => {
+      sampleData.forEach((row, i) => {
+        const inputs = rows[i].querySelectorAll('input');
+        row.forEach((value, j) => inputs[j].value = value);
+      });
+      document.getElementById('pdfTitle').textContent = docTitle.value || 'Annual Cleaning Record';
+      document.getElementById('pdfProject').textContent = projectName.value || '';
+      document.getElementById('pdfLocation').textContent = locationInput.value || '';
+      document.getElementById('pdfPeriod').textContent = periodInput.value || '';
+      noticeBox.textContent = `Status: OCR preview ready for "${docTitle.value || 'Annual Cleaning Record'}".`;
+    });
+
+    resetBtn.addEventListener('click', () => {
+      rows.forEach((tr, i) => {
+        const inputs = tr.querySelectorAll('input');
+        inputs.forEach((input, idx) => input.value = idx === 0 ? String(i + 1).padStart(3,'0') : '');
+      });
+      previewFrame.className = 'preview empty';
+      previewFrame.innerHTML = 'Uploaded image preview';
+      imageInput.value = '';
+      docTitle.value = 'Annual Cleaning Record';
+      projectName.value = '';
+      locationInput.value = '';
+      periodInput.value = '';
+      document.getElementById('pdfTitle').textContent = '';
+      document.getElementById('pdfProject').textContent = '';
+      document.getElementById('pdfLocation').textContent = '';
+      document.getElementById('pdfPeriod').textContent = '';
+      noticeBox.textContent = 'Status: reset complete. Waiting for image upload.';
+    });
+
     function exportPdf() {
-      window.print();
+      const el = document.getElementById('pdfSheet');
+      html2pdf().set({
+        margin: 0.25,
+        filename: 'cleaning-record.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      }).from(el).save();
     }
   </script>
 </body>
