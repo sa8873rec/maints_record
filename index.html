@@ -37,13 +37,16 @@
     td input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px}
     .export-bar{display:flex;justify-content:flex-end;margin-top:10px}
     .export-btn{padding:14px 22px;min-width:160px;font-size:16px;background:#58a6b3;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.22)}
-    .pdf-sheet{display:none;background:#fff;color:#000;padding:24px;font-family:Arial,sans-serif}
-    .pdf-company{text-align:left;font-size:14px;font-weight:700;margin-bottom:8px}
-    .pdf-title{text-align:center;font-size:20px;font-weight:700;margin-bottom:14px}
-    .pdf-meta{font-size:14px;margin-bottom:14px;line-height:1.7}
-    .pdf-table{width:100%;border-collapse:collapse;font-size:12px}
-    .pdf-table th,.pdf-table td{border:1px solid #000;padding:6px 8px;vertical-align:middle;text-align:left}
-    .pdf-table th{background:#eee;font-weight:700}
+    /* Hidden print target: keep in DOM for html2canvas; never use z-index:-1 (breaks capture) */
+    .pdf-sheet{display:none;background:#fff;color:#000;padding:18mm 16mm;font-family:Arial,sans-serif;width:210mm;min-height:297mm;box-sizing:border-box}
+    .pdf-company{text-align:left;font-size:13px;font-weight:700;margin-bottom:6px}
+    .pdf-title{text-align:center;font-size:16px;font-weight:700;margin-bottom:10mm}
+    .pdf-meta{font-size:12px;margin-bottom:8mm;line-height:1.75}
+    .pdf-meta div{margin:0 0 2mm 0}
+    .pdf-table{width:100%;border-collapse:collapse;font-size:8.5pt;table-layout:fixed}
+    .pdf-table th,.pdf-table td{border:1px solid #000;padding:3mm 2mm;vertical-align:middle;word-wrap:break-word}
+    .pdf-table th{background:#eee;font-weight:700;text-align:center;line-height:1.2}
+    .pdf-table td{text-align:center}
     @media (max-width:900px){
       .grid{grid-template-columns:1fr}
       .wrap{padding:14px}
@@ -52,9 +55,10 @@
       .export-btn{width:100%}
     }
     @media print{
-      .card,.export-bar{display:none !important}
-      .pdf-sheet{display:block !important}
-      @page{size:A4;margin:12mm}
+      body{background:#fff}
+      .wrap > *:not(.pdf-sheet){display:none !important}
+      .pdf-sheet{display:block !important;margin:0 auto}
+      @page{size:A4;margin:0}
     }
   </style>
 </head>
@@ -62,7 +66,7 @@
   <div class="wrap">
     <div class="header">
       <h1>Cleaning Record</h1>
-      <p>Fill in the basic information, upload image, then preview OCR data.</p>
+      <p>Fill project details, upload a <strong>screenshot</strong> of the software IC table, then click <strong>Extract from image</strong> (runs OCR in the browser).</p>
     </div>
 
     <section class="card">
@@ -94,7 +98,7 @@
         <div class="preview empty" id="previewFrame">Uploaded image preview</div>
 
         <div class="actions">
-          <button type="button" class="primary" id="ocrBtn">Preview OCR</button>
+          <button type="button" class="primary" id="ocrBtn">Extract from image</button>
           <button type="button" class="ghost" id="resetBtn">Reset</button>
         </div>
         <div class="note" id="noticeBox">Status: waiting for image upload.</div>
@@ -127,12 +131,12 @@
     </section>
 
     <div class="export-bar">
-      <button class="export-btn" id="exportPdfBtn" onclick="exportPdf()">Export PDF</button>
+      <button type="button" class="export-btn" id="exportPdfBtn">Export PDF</button>
     </div>
 
-    <section class="pdf-sheet" id="pdfSheet">
+    <section class="pdf-sheet" id="pdfSheet" aria-hidden="true">
       <div class="pdf-company">REC Engineering Contracting Company Limited</div>
-      <div class="pdf-title">Annual Cleaning Record</div>
+      <div class="pdf-title" id="pdfDisplayTitle">Annual Cleaning Record</div>
       <div class="pdf-meta">
         <div>Title : <span id="pdfTitle"></span></div>
         <div>Project Name : <span id="pdfProject"></span></div>
@@ -153,15 +157,13 @@
           </tr>
         </thead>
         <tbody id="pdfBody">
-          <tr><td>001</td><td>13</td><td>8.3</td><td>8.3</td><td>23.2</td><td>8.7</td><td>Cooling</td><td>Cool ON</td></tr>
-          <tr><td>002</td><td>13</td><td>9.1</td><td>12.3</td><td>26.8</td><td>8.7</td><td>Cooling</td><td>Cool ON</td></tr>
-          <tr><td>003</td><td>13</td><td>8.3</td><td>9.1</td><td>25.6</td><td>8.7</td><td>Cooling</td><td>Cool ON</td></tr>
         </tbody>
       </table>
     </section>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
     const previewFrame = document.getElementById('previewFrame');
     const imageInput = document.getElementById('imageInput');
@@ -172,13 +174,283 @@
     const periodInput = document.getElementById('period');
     const ocrBtn = document.getElementById('ocrBtn');
     const resetBtn = document.getElementById('resetBtn');
-    const rows = Array.from(document.querySelectorAll('#ocrTableBody tr'));
+    const rows = () => Array.from(document.querySelectorAll('#ocrTableBody tr'));
 
-    const sampleData = [
-      ['001','13','23.2','8.7','8.3','8.3','Cooling','Cool ON'],
-      ['002','13','26.8','8.7','9.1','12.3','Cooling','Cool ON'],
-      ['003','13','25.6','8.7','8.3','9.1','Cooling','Cool ON']
-    ];
+    /**
+     * Photo IC table → grid columns: 0 IC, 1 QJ, 2 TH1, 3 TH2, 4 TH3, 5 TH4, 6 Mode, 7 IC S
+     * PDF columns: IC, kW, TH3, TH4, TH1, TH2, Mode, Status
+     */
+
+    function extractNumbersFromString(s) {
+      if (!s) return [];
+      const m = s.match(/-?\d+\.\d+|-?\d+/g);
+      return m ? m.map(Number) : [];
+    }
+
+    /** Split text after a row label into n column tokens (handles "Cool ON") */
+    function splitColumnTokens(rest, expectedCols) {
+      const t = rest.trim();
+      const byCool = t.match(/(?:Cool|Heat|Warm)\s+ON|(?:Cool|Heat)\s*OFF|OFF|ON/gi);
+      if (byCool && byCool.length >= expectedCols)
+        return byCool.slice(0, expectedCols).map((x) => x.replace(/\s+/g, ' '));
+      const parts = t.split(/\s{2,}/).filter(Boolean);
+      if (parts.length >= expectedCols) return parts.slice(0, expectedCols);
+      const loose = t.split(/\s+/).filter(Boolean);
+      if (loose.length >= expectedCols) return loose.slice(0, expectedCols);
+      return [];
+    }
+
+    /**
+     * Parse Tesseract output from PUMY-style IC block: row labels (QJ, TH1…TH4, Mode, IC S)
+     * with one value per IC column; fallback: full-line row pattern 001 13 …
+     */
+    function parseIcScreenshot(ocrText) {
+      const lines = ocrText
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      function lineStartsWithLabel(label) {
+        const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp('^\\s*' + esc + '\\b', 'i');
+      }
+
+      function restAfterLabel(line, label) {
+        return line.replace(new RegExp('^\\s*' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').trim();
+      }
+
+      let qj = [];
+      let th1 = [];
+      let th2 = [];
+      let th3 = [];
+      let th4 = [];
+      let modes = [];
+      let icSs = [];
+      let icNums = [];
+
+      const modeCandidates = [];
+
+      /** Prefer the row with the most numeric cells (IC table), not a single THx=value from the top pane */
+      function takeLonger(arr, candidate) {
+        return candidate.length > arr.length ? candidate : arr;
+      }
+
+      for (const L of lines) {
+        if (lineStartsWithLabel('QJ').test(L) || /^\s*Q\s*J\b/i.test(L)) {
+          const LN = L.replace(/^\s*Q\s*J/i, 'QJ');
+          qj = takeLonger(qj, extractNumbersFromString(restAfterLabel(LN, 'QJ')));
+        }
+        if (lineStartsWithLabel('TH1').test(L) || /^\s*TH\s*1\b/i.test(L))
+          th1 = takeLonger(th1, extractNumbersFromString(L.replace(/^\s*TH\s*1\s*/i, '')));
+        if (lineStartsWithLabel('TH2').test(L) || /^\s*TH\s*2\b/i.test(L))
+          th2 = takeLonger(th2, extractNumbersFromString(L.replace(/^\s*TH\s*2\s*/i, '')));
+        if (lineStartsWithLabel('TH3').test(L) || /^\s*TH\s*3\b/i.test(L))
+          th3 = takeLonger(th3, extractNumbersFromString(L.replace(/^\s*TH\s*3\s*/i, '')));
+        if (lineStartsWithLabel('TH4').test(L) || /^\s*TH\s*4\b/i.test(L))
+          th4 = takeLonger(th4, extractNumbersFromString(L.replace(/^\s*TH\s*4\s*/i, '')));
+        if (lineStartsWithLabel('Mode').test(L)) {
+          const rest = restAfterLabel(L, 'Mode');
+          const cand = rest.split(/\s+/).filter(Boolean);
+          if (cand.length) modeCandidates.push(cand);
+        }
+        if (/^IC\s*S\b/i.test(L) || /^ICS\b/i.test(L)) {
+          const rest = L.replace(/^IC\s*S\s*/i, '').replace(/^ICS\s*/i, '').trim();
+          const st = [...rest.matchAll(/(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF|OFF|ON)/gi)];
+          if (st.length) icSs = takeLonger(icSs, st.map((m) => m[0].replace(/\s+/g, ' ')));
+        }
+      }
+
+      if (modeCandidates.length)
+        modes = modeCandidates.reduce((a, b) => (a.length >= b.length ? a : b), []);
+
+      if (!qj.length) {
+        const ln = lines.find((l) => /Q\s*J/i.test(l) && extractNumbersFromString(l).length >= 1);
+        if (ln) qj = extractNumbersFromString(ln.replace(/^.*?\bQ\s*J\s*/i, ''));
+      }
+
+      const numericLens = [qj.length, th1.length, th2.length, th3.length, th4.length].filter((n) => n > 0);
+      let n = numericLens.length ? Math.min.apply(null, numericLens) : 0;
+
+      if (n === 0) {
+        const rowWise = [];
+        for (const L of lines) {
+          const m = L.match(
+            /^\s*(\d{3})\s+([\d.]+)\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/
+          );
+          if (m) rowWise.push({ ic: m[1], qj: m[2], th1: m[3], th2: m[4], th3: m[5], th4: m[6] });
+        }
+        if (rowWise.length) {
+          n = rowWise.length;
+          icNums = rowWise.map((r) => r.ic);
+          qj = rowWise.map((r) => r.qj);
+          th1 = rowWise.map((r) => r.th1);
+          th2 = rowWise.map((r) => r.th2);
+          th3 = rowWise.map((r) => r.th3);
+          th4 = rowWise.map((r) => r.th4);
+        }
+      }
+
+      if (n === 0) return { ok: false, reason: 'no IC rows (expected QJ / TH1–TH4 lines or row pattern).' };
+
+      if (icSs.length < n) {
+        const lineIcs = lines.find((l) => /^IC\s*S\b/i.test(l) || /^ICS\b/i.test(l));
+        if (lineIcs) {
+          const rest = lineIcs.replace(/^IC\s*S\s*/i, '').replace(/^ICS\s*/i, '').trim();
+          const st2 = [...rest.matchAll(/(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF|OFF|ON)/gi)];
+          if (st2.length >= n) icSs = st2.slice(0, n).map((m) => m[0].replace(/\s+/g, ' '));
+          else if (st2.length) icSs = st2.map((m) => m[0].replace(/\s+/g, ' '));
+          if (icSs.length < n) {
+            const extra = splitColumnTokens(rest, n);
+            if (extra.length >= n) icSs = extra.slice(0, n);
+          }
+        }
+      }
+
+      const icLine = lines.find((l) => /\b001\b/.test(l) && /\b002\b/.test(l));
+      if (icLine) {
+        const three = icLine.match(/\b\d{3}\b/g);
+        if (three && three.length >= n) icNums = three.slice(0, n);
+      }
+      if (icNums.length < n) {
+        for (let i = icNums.length; i < n; i++)
+          icNums.push(String(i + 1).padStart(3, '0'));
+      }
+
+      if (modes.length > n) modes = modes.slice(0, n);
+      const lastMode = modes.length ? modes[modes.length - 1] : '';
+      while (modes.length < n) modes.push(lastMode);
+
+      if (icSs.length > n) icSs = icSs.slice(0, n);
+      const lastIc = icSs.length ? icSs[icSs.length - 1] : '';
+      while (icSs.length < n) icSs.push(lastIc);
+
+      const rows = [];
+      for (let i = 0; i < n; i++) {
+        rows.push([
+          String(icNums[i] != null ? icNums[i] : String(i + 1).padStart(3, '0')),
+          qj[i] != null ? String(qj[i]) : '',
+          th1[i] != null ? String(th1[i]) : '',
+          th2[i] != null ? String(th2[i]) : '',
+          th3[i] != null ? String(th3[i]) : '',
+          th4[i] != null ? String(th4[i]) : '',
+          modes[i] || '',
+          icSs[i] || '',
+        ]);
+      }
+      return { ok: true, rows };
+    }
+
+    function ensureTableRowCount(n) {
+      const tbody = document.getElementById('ocrTableBody');
+      while (tbody.rows.length < n) {
+        const tr = document.createElement('tr');
+        for (let c = 0; c < 8; c++) {
+          const td = document.createElement('td');
+          const inp = document.createElement('input');
+          if (c === 0) inp.value = String(tbody.rows.length + 1).padStart(3, '0');
+          td.appendChild(inp);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      while (tbody.rows.length > n) tbody.deleteRow(tbody.rows.length - 1);
+    }
+
+    function applyRowsToTable(rowMatrix) {
+      ensureTableRowCount(rowMatrix.length);
+      rowMatrix.forEach((row, i) => {
+        const r = rows()[i];
+        if (!r) return;
+        const inputs = r.querySelectorAll('input');
+        row.forEach((value, j) => {
+          if (inputs[j]) inputs[j].value = value;
+        });
+      });
+    }
+
+    async function runOcrFromUploadedImage() {
+      if (typeof Tesseract === 'undefined') {
+        noticeBox.textContent =
+          'Status: Tesseract.js failed to load (CDN/network). Check connection or try another network.';
+        return;
+      }
+      const img = previewFrame.querySelector('img');
+      if (!img || !img.src) {
+        noticeBox.textContent = 'Status: upload a screenshot of the IC table first.';
+        return;
+      }
+
+      ocrBtn.disabled = true;
+      noticeBox.textContent = 'Status: OCR running (first run may download language data; ~20–60 s)…';
+
+      try {
+        const {
+          data: { text },
+        } = await Tesseract.recognize(img.src, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text' && m.progress != null) {
+              noticeBox.textContent = `Status: OCR recognition ${Math.round(m.progress * 100)}%…`;
+            }
+          },
+        });
+
+        const parsed = parseIcScreenshot(text);
+        if (!parsed.ok) {
+          console.warn('OCR raw text:\n', text);
+          noticeBox.textContent =
+            'Status: could not parse IC table. See browser console (F12) for raw OCR text. ' +
+            (parsed.reason || '');
+          ocrBtn.disabled = false;
+          return;
+        }
+
+        applyRowsToTable(parsed.rows);
+        syncPdfFromUi();
+        noticeBox.textContent = `Status: extracted ${parsed.rows.length} row(s). Review numbers (OCR may misread) → Export PDF.`;
+      } catch (err) {
+        console.error(err);
+        noticeBox.textContent = 'Status: OCR failed. ' + (err && err.message ? err.message : String(err));
+      }
+      ocrBtn.disabled = false;
+    }
+
+    /**
+     * Data grid columns (OCR): 0 IC, 1 QJ(kW), 2 TH1, 3 TH2, 4 TH3, 5 TH4, 6 Mode, 7 IC S
+     * PDF columns: IC, kW, TH3, TH4, TH1, TH2, Mode, Status
+     */
+    function syncPdfFromUi() {
+      const title = (docTitle.value || '').trim() || 'Annual Cleaning Record';
+      document.getElementById('pdfDisplayTitle').textContent = title;
+      document.getElementById('pdfTitle').textContent = title;
+      document.getElementById('pdfProject').textContent = (projectName.value || '').trim();
+      document.getElementById('pdfLocation').textContent = (locationInput.value || '').trim();
+      document.getElementById('pdfPeriod').textContent = (periodInput.value || '').trim();
+
+      const pdfBody = document.getElementById('pdfBody');
+      pdfBody.textContent = '';
+      rows().forEach((tr) => {
+        const inputs = tr.querySelectorAll('input');
+        const v = (i) => (inputs[i] && inputs[i].value != null) ? String(inputs[i].value).trim() : '';
+        const tds = [
+          v(0),
+          v(1),
+          v(4),
+          v(5),
+          v(2),
+          v(3),
+          v(6),
+          v(7)
+        ];
+        const trOut = document.createElement('tr');
+        tds.forEach((text) => {
+          const td = document.createElement('td');
+          td.textContent = text;
+          trOut.appendChild(td);
+        });
+        pdfBody.appendChild(trOut);
+      });
+    }
 
     imageInput.addEventListener('change', (e) => {
       const file = e.target.files?.[0];
@@ -186,25 +458,17 @@
       const url = URL.createObjectURL(file);
       previewFrame.classList.remove('empty');
       previewFrame.innerHTML = `<img src="${url}" alt="Uploaded image">`;
-      noticeBox.textContent = 'Status: image uploaded. Click Preview OCR.';
+      noticeBox.textContent = 'Status: image uploaded. Click “Extract from image”.';
     });
 
     ocrBtn.addEventListener('click', () => {
-      sampleData.forEach((row, i) => {
-        const inputs = rows[i].querySelectorAll('input');
-        row.forEach((value, j) => inputs[j].value = value);
-      });
-      document.getElementById('pdfTitle').textContent = docTitle.value || 'Annual Cleaning Record';
-      document.getElementById('pdfProject').textContent = projectName.value || '';
-      document.getElementById('pdfLocation').textContent = locationInput.value || '';
-      document.getElementById('pdfPeriod').textContent = periodInput.value || '';
-      noticeBox.textContent = `Status: OCR preview ready for "${docTitle.value || 'Annual Cleaning Record'}".`;
+      void runOcrFromUploadedImage();
     });
 
     resetBtn.addEventListener('click', () => {
-      rows.forEach((tr, i) => {
+      rows().forEach((tr, i) => {
         const inputs = tr.querySelectorAll('input');
-        inputs.forEach((input, idx) => input.value = idx === 0 ? String(i + 1).padStart(3,'0') : '');
+        inputs.forEach((input, idx) => { input.value = idx === 0 ? String(i + 1).padStart(3,'0') : ''; });
       });
       previewFrame.className = 'preview empty';
       previewFrame.innerHTML = 'Uploaded image preview';
@@ -213,44 +477,68 @@
       projectName.value = '';
       locationInput.value = '';
       periodInput.value = '';
-      document.getElementById('pdfTitle').textContent = '';
-      document.getElementById('pdfProject').textContent = '';
-      document.getElementById('pdfLocation').textContent = '';
-      document.getElementById('pdfPeriod').textContent = '';
+      syncPdfFromUi();
       noticeBox.textContent = 'Status: reset complete. Waiting for image upload.';
     });
 
+    document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
+
     function exportPdf() {
+      if (typeof html2pdf === 'undefined') {
+        noticeBox.textContent = 'Status: html2pdf failed to load (check network / CDN). Use Print (Ctrl+P) → Save as PDF instead.';
+        return;
+      }
+
+      syncPdfFromUi();
+
       const el = document.getElementById('pdfSheet');
       const clone = el.cloneNode(true);
-
+      clone.removeAttribute('id');
+      clone.removeAttribute('aria-hidden');
+      clone.classList.remove('pdf-sheet');
       clone.style.display = 'block';
-      clone.style.position = 'fixed';
-      clone.style.left = '0';
+      clone.style.position = 'absolute';
+      clone.style.left = '-10000px';
       clone.style.top = '0';
-      clone.style.zIndex = '-1';
       clone.style.width = '210mm';
+      clone.style.minHeight = '297mm';
+      clone.style.padding = '18mm 16mm';
       clone.style.background = '#ffffff';
-
+      clone.style.color = '#000000';
+      clone.style.boxSizing = 'border-box';
       document.body.appendChild(clone);
 
-      html2pdf().set({
-        margin: 0.25,
+      const opt = {
+        margin: [10, 10, 10, 10],
         filename: 'cleaning-record.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg', quality: 0.95 },
         html2canvas: {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           backgroundColor: '#ffffff',
           scrollX: 0,
-          scrollY: 0
+          scrollY: 0,
+          windowWidth: 1200,
+          logging: false
         },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      }).from(clone).save().then(() => {
-        clone.remove();
-      });
+      };
+
+      html2pdf()
+        .set(opt)
+        .from(clone)
+        .save()
+        .then(() => { clone.remove(); })
+        .catch((err) => {
+          clone.remove();
+          console.error(err);
+          noticeBox.textContent = 'Status: PDF export failed. Try Ctrl+P → Save as PDF, or check the console.';
+        });
     }
+
+    syncPdfFromUi();
   </script>
 </body>
 </html>
