@@ -65,7 +65,7 @@
   <div class="wrap">
     <div class="header">
       <h1>Cleaning Record</h1>
-      <p>Fill project details, upload a screenshot of IC table, then click Extract from image.</p>
+      <p>Fill project details, upload IC screenshot, then click Extract from image.</p>
     </div>
 
     <section class="card">
@@ -183,7 +183,7 @@
           const td = document.createElement('td');
           const inp = document.createElement('input');
           inp.type = 'text';
-          if (c === 0) inp.value = String(tbody.rows.length + 1).padStart(3, '0');
+          inp.value = c === 0 ? String(tbody.rows.length + 1).padStart(3, '0') : '';
           td.appendChild(inp);
           tr.appendChild(td);
         }
@@ -195,336 +195,316 @@
     function applyRowsToTable(rowMatrix) {
       ensureTableRowCount(Math.max(1, rowMatrix.length));
       rowMatrix.forEach((row, i) => {
-        const r = rows()[i];
-        if (!r) return;
-        const inputs = r.querySelectorAll('input');
+        const tr = rows()[i];
+        if (!tr) return;
+        const inputs = tr.querySelectorAll('input');
         row.forEach((value, j) => {
           if (inputs[j]) inputs[j].value = value;
         });
       });
     }
 
-    function normalizeRowText(line) {
+    function normalizeLine(line) {
       return line
-        .replace(/[|]/g, ' ')
-        .replace(/[Oo](?=\d)/g, '0')
-        .replace(/(?<=\d)[Oo]/g, '0')
-        .replace(/[,]/g, '.')
-        .replace(/\s+/g, ' ')
+        .replace(/[|]/g, " ")
+        .replace(/[,]/g, ".")
+        .replace(/(?<=\d)[Oo](?=\d|\s|$)/g, "0")
+        .replace(/(?<=\s)[Oo](?=\d)/g, "0")
+        .replace(/\s+/g, " ")
         .trim();
     }
 
-    function pickMode(line) {
+    function repairDecimalValue(raw) {
+      if (raw == null) return "";
+      let s = String(raw).trim().replace(",", ".");
+      if (!s) return "";
+      if (s.includes(".")) return s;
+      if (!/^\d+$/.test(s)) return s;
+
+      const n = Number(s);
+      if (!Number.isFinite(n)) return s;
+
+      if (s.length >= 2 && n >= 60) {
+        const repaired = (n / 10).toFixed(1);
+        const rv = Number(repaired);
+        if (rv >= 5 && rv <= 45) return repaired;
+      }
+
+      if (s.length >= 4) {
+        const repaired = (n / 100).toFixed(1);
+        const rv = Number(repaired);
+        if (rv >= 5 && rv <= 45) return repaired;
+      }
+
+      return s;
+    }
+
+    function extractMode(line) {
       const m = line.match(/\b(Cooling|Heating|Auto|Fan)\b/i);
-      return m ? m[1] : '';
+      return m ? m[1] : "";
     }
 
-    function pickIcStatus(line) {
-      const m = line.match(/\b(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF|OFF|ON)\b/i);
-      return m ? m[1].replace(/\s+/g, ' ') : '';
+    function extractIcStatus(line, mode) {
+      const phrase = line.match(/\b(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF)\b/i);
+      if (phrase) return phrase[1].replace(/\s+/g, " ");
+
+      const simple = line.match(/\b(ON|OFF)\b/i);
+      if (simple) {
+        const state = simple[1].toUpperCase();
+        if (/cool/i.test(mode)) return `Cool ${state}`;
+        if (/heat/i.test(mode)) return `Heat ${state}`;
+        return state;
+      }
+      return "";
     }
 
-    function parseRowByPosition(line) {
-      const clean = normalizeRowText(line);
+    function parseRowFromLine(line) {
+      const clean = normalizeLine(line);
       const mIc = clean.match(/^\s*(\d{3})\b/);
       if (!mIc) return null;
 
       const nums = clean.match(/-?\d+(?:\.\d+)?/g) || [];
       if (nums.length < 8) return null;
 
-      // Expected numeric sequence for this software table:
-      // [IC, QJ, G_No, B_No, TH1, TH2, TH3, TH4, ...]
       const ic = nums[0];
-      const qj = nums[1] || '';
-      const th1 = nums[4] || '';
-      const th2 = nums[5] || '';
-      const th3 = nums[6] || '';
-      const th4 = nums[7] || '';
+      const qj = nums[1] || "";
+      const th1 = repairDecimalValue(nums[4] || "");
+      const th2 = repairDecimalValue(nums[5] || "");
+      const th3 = repairDecimalValue(nums[6] || "");
+      const th4 = repairDecimalValue(nums[7] || "");
 
-      return [
-        ic,
-        qj,
-        th1,
-        th2,
-        th3,
-        th4,
-        pickMode(clean),
-        pickIcStatus(clean)
-      ];
-    }
+      const mode = extractMode(clean);
+      const ics = extractIcStatus(clean, mode);
 
-    function parseRowByCompactPattern(line) {
-      // Fallback for merged/split OCR:
-      // tries to extract IC + 6 numeric values at minimum
-      const clean = normalizeRowText(line);
-      const m = clean.match(/^\s*(\d{3})\s+(.+)$/);
-      if (!m) return null;
-
-      const ic = m[1];
-      const rest = m[2];
-      const nums = rest.match(/-?\d+(?:\.\d+)?/g) || [];
-      if (nums.length < 6) return null;
-
-      // If G_No/B_No were lost, use heuristic:
-      // QJ is usually first numeric, TH1..TH4 are next 4 realistic decimals
-      const qj = nums[0] || '';
-      const decimalCandidates = nums.filter(v => v.includes('.'));
-      let th1 = '', th2 = '', th3 = '', th4 = '';
-
-      if (decimalCandidates.length >= 4) {
-        th1 = decimalCandidates[0];
-        th2 = decimalCandidates[1];
-        th3 = decimalCandidates[2];
-        th4 = decimalCandidates[3];
-      } else {
-        th1 = nums[1] || '';
-        th2 = nums[2] || '';
-        th3 = nums[3] || '';
-        th4 = nums[4] || '';
-      }
-
-      return [
-        ic,
-        qj,
-        th1,
-        th2,
-        th3,
-        th4,
-        pickMode(clean),
-        pickIcStatus(clean)
-      ];
+      return [ic, qj, th1, th2, th3, th4, mode, ics];
     }
 
     function parseIcScreenshot(ocrText) {
       const lines = ocrText
-        .replace(/\r/g, '\n')
-        .split('\n')
+        .replace(/\r/g, "\n")
+        .split("\n")
         .map(l => l.trim())
         .filter(Boolean);
 
-      // Prefer lower table region text by starting after header line containing IC/QJ/TH columns.
       let startIdx = 0;
       for (let i = 0; i < lines.length; i++) {
-        const L = lines[i].toUpperCase().replace(/\s+/g, '');
-        if (L.includes('IC') && L.includes('QJ') && L.includes('TH1') && L.includes('TH2')) {
+        const t = lines[i].toUpperCase().replace(/\s+/g, "");
+        if (t.includes("IC") && t.includes("QJ") && t.includes("TH1") && t.includes("TH2") && t.includes("TH3")) {
           startIdx = i + 1;
           break;
         }
       }
-      const candidateLines = lines.slice(startIdx);
 
+      const candidates = lines.slice(startIdx);
       const extracted = [];
-      for (const rawLine of candidateLines) {
-        const line = normalizeRowText(rawLine);
 
-        // Ignore upper status pane / irrelevant lines
-        if (/OPERATION|MODE=|Hz=|SCm|LEV|Etm|demand|TH7|TH8|SV1|SV2|SV3|52C|2IS4|Addr|series/i.test(line)) continue;
+      for (const raw of candidates) {
+        const line = normalizeLine(raw);
 
-        // Keep row-by-row extraction from lower IC table only
-        let row = parseRowByPosition(line);
-        if (!row) row = parseRowByCompactPattern(line);
+        if (/OPERATION|MODE=|HZ=|SCM|LEV|ETM|DEMAND|SV1|SV2|SV3|TH7|TH8|ADDR|SERIES|PUMY|V\(V\)|I\(INPUT\)/i.test(line)) continue;
+        if (/^\s*(IC|QJ|G_NO|B_NO|TH1|TH2|TH3|TH4|SH\/SC|LI|TO|SAVE|O\/F|MODE|STATE|IC\s*S|FAN)\b/i.test(line)) continue;
 
-        if (row) {
-          // Deduplicate if OCR outputs the same row twice
-          const key = row.slice(0, 6).join('|');
-          const exists = extracted.some(r => r.slice(0, 6).join('|') === key);
-          if (!exists) extracted.push(row);
-        }
+        const row = parseRowFromLine(line);
+        if (!row) continue;
+
+        const key = row.slice(0, 6).join("|");
+        const exists = extracted.some(r => r.slice(0, 6).join("|") === key);
+        if (!exists) extracted.push(row);
       }
 
-      // Sort by IC no.
       extracted.sort((a, b) => Number(a[0]) - Number(b[0]));
-
-      if (!extracted.length) {
-        return { ok: false, reason: 'No IC table rows recognized from lower panel.' };
-      }
+      if (!extracted.length) return { ok: false, reason: "No IC rows recognized from lower table." };
 
       return { ok: true, rows: extracted };
     }
 
     function syncPdfFromUi() {
-      const title = (docTitle.value || '').trim() || 'Annual Cleaning Record';
-      document.getElementById('pdfDisplayTitle').textContent = title;
-      document.getElementById('pdfTitle').textContent = title;
-      document.getElementById('pdfProject').textContent = (projectName.value || '').trim();
-      document.getElementById('pdfLocation').textContent = (locationInput.value || '').trim();
-      document.getElementById('pdfPeriod').textContent = (periodInput.value || '').trim();
+      const title = (docTitle.value || "").trim() || "Annual Cleaning Record";
+      document.getElementById("pdfDisplayTitle").textContent = title;
+      document.getElementById("pdfTitle").textContent = title;
+      document.getElementById("pdfProject").textContent = (projectName.value || "").trim();
+      document.getElementById("pdfLocation").textContent = (locationInput.value || "").trim();
+      document.getElementById("pdfPeriod").textContent = (periodInput.value || "").trim();
 
-      const pdfBody = document.getElementById('pdfBody');
-      pdfBody.textContent = '';
+      const pdfBody = document.getElementById("pdfBody");
+      pdfBody.textContent = "";
 
       rows().forEach((tr) => {
-        const inputs = tr.querySelectorAll('input');
-        const v = (i) => (inputs[i] && inputs[i].value != null) ? String(inputs[i].value).trim() : '';
+        const inputs = tr.querySelectorAll("input");
+        const v = (i) => (inputs[i] && inputs[i].value != null) ? String(inputs[i].value).trim() : "";
 
-        // PDF order: IC, kW, TH3, TH4, TH1, TH2, Mode, IC S
         const ordered = [v(0), v(1), v(4), v(5), v(2), v(3), v(6), v(7)];
+        const out = document.createElement("tr");
 
-        const trOut = document.createElement('tr');
-        ordered.forEach((text) => {
-          const td = document.createElement('td');
-          td.textContent = text;
-          trOut.appendChild(td);
+        ordered.forEach((txt) => {
+          const td = document.createElement("td");
+          td.textContent = txt;
+          out.appendChild(td);
         });
-        pdfBody.appendChild(trOut);
+
+        pdfBody.appendChild(out);
       });
     }
 
     async function runOcrFromUploadedImage() {
-      if (typeof Tesseract === 'undefined') {
-        noticeBox.textContent = 'Status: Tesseract.js failed to load (CDN/network).';
+      if (typeof Tesseract === "undefined") {
+        noticeBox.textContent = "Status: Tesseract.js failed to load (CDN/network).";
         return;
       }
-      const img = previewFrame.querySelector('img');
+
+      const img = previewFrame.querySelector("img");
       if (!img || !img.src) {
-        noticeBox.textContent = 'Status: upload an IC screenshot first.';
+        noticeBox.textContent = "Status: upload screenshot first.";
         return;
       }
 
       ocrBtn.disabled = true;
-      noticeBox.textContent = 'Status: OCR running (targeting lower IC table region)...';
+      noticeBox.textContent = "Status: OCR running (lower IC table only)...";
 
       try {
-        // Crop bottom region to ignore top operation/status panel.
-        const sourceImg = new Image();
-        sourceImg.crossOrigin = 'anonymous';
-        sourceImg.src = img.src;
+        const src = new Image();
+        src.crossOrigin = "anonymous";
+        src.src = img.src;
+
         await new Promise((resolve, reject) => {
-          sourceImg.onload = resolve;
-          sourceImg.onerror = reject;
+          src.onload = resolve;
+          src.onerror = reject;
         });
 
-        const cropRatioTop = 0.55; // keep lower 45% where IC table is
+        const cropTopRatio = 0.55;
         const sx = 0;
-        const sy = Math.floor(sourceImg.height * cropRatioTop);
-        const sw = sourceImg.width;
-        const sh = sourceImg.height - sy;
+        const sy = Math.floor(src.height * cropTopRatio);
+        const sw = src.width;
+        const sh = src.height - sy;
 
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.width = sw;
         canvas.height = sh;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(sourceImg, sx, sy, sw, sh, 0, 0, sw, sh);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
 
-        const {
-          data: { text },
-        } = await Tesseract.recognize(canvas.toDataURL('image/png'), 'eng', {
+        const { data: { text } } = await Tesseract.recognize(canvas.toDataURL("image/png"), "eng", {
           logger: (m) => {
-            if (m.status === 'recognizing text' && m.progress != null) {
+            if (m.status === "recognizing text" && m.progress != null) {
               noticeBox.textContent = `Status: OCR recognition ${Math.round(m.progress * 100)}%...`;
             }
           },
-          tessedit_pageseg_mode: '6',
-          preserve_interword_spaces: '1'
+          tessedit_pageseg_mode: "6",
+          preserve_interword_spaces: "1",
+          tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./- "
         });
 
         const parsed = parseIcScreenshot(text);
         if (!parsed.ok) {
-          console.warn('OCR raw text:\n', text);
-          noticeBox.textContent = 'Status: parse failed. Please use a clearer screenshot (table area).';
+          console.warn("OCR raw text:\n", text);
+          noticeBox.textContent = `Status: parse failed. ${parsed.reason}`;
           return;
         }
 
         applyRowsToTable(parsed.rows);
         syncPdfFromUi();
-        noticeBox.textContent = `Status: extracted ${parsed.rows.length} row(s). Please review/edit before exporting.`;
+        noticeBox.textContent = `Status: extracted ${parsed.rows.length} row(s). You can edit values before export.`;
       } catch (err) {
         console.error(err);
-        noticeBox.textContent = 'Status: OCR failed. ' + (err && err.message ? err.message : String(err));
+        noticeBox.textContent = "Status: OCR failed. " + (err && err.message ? err.message : String(err));
       } finally {
         ocrBtn.disabled = false;
       }
     }
 
-    imageInput.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      previewFrame.classList.remove('empty');
-      previewFrame.innerHTML = `<img src="${url}" alt="Uploaded image">`;
-      noticeBox.textContent = 'Status: image uploaded. Click "Extract from image".';
-    });
-
-    ocrBtn.addEventListener('click', () => { void runOcrFromUploadedImage(); });
-
-    resetBtn.addEventListener('click', () => {
-      ensureTableRowCount(3);
-      rows().forEach((tr, i) => {
-        const inputs = tr.querySelectorAll('input');
-        inputs.forEach((input, idx) => { input.value = idx === 0 ? String(i + 1).padStart(3,'0') : ''; });
-      });
-      previewFrame.className = 'preview empty';
-      previewFrame.innerHTML = 'Uploaded image preview';
-      imageInput.value = '';
-      docTitle.value = 'Annual Cleaning Record';
-      projectName.value = '';
-      locationInput.value = '';
-      periodInput.value = '';
-      syncPdfFromUi();
-      noticeBox.textContent = 'Status: reset complete.';
-    });
-
-    document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
-
     function exportPdf() {
       syncPdfFromUi();
 
-      if (typeof html2pdf === 'undefined') {
-        noticeBox.textContent = 'Status: html2pdf unavailable. Using print fallback.';
+      if (typeof html2pdf === "undefined") {
+        noticeBox.textContent = "Status: html2pdf unavailable. Using print fallback.";
         window.print();
         return;
       }
 
-      const el = document.getElementById('pdfSheet');
+      const el = document.getElementById("pdfSheet");
       const clone = el.cloneNode(true);
 
-      clone.removeAttribute('id');
-      clone.removeAttribute('aria-hidden');
-      clone.classList.remove('pdf-sheet');
-      clone.style.display = 'block';
-      clone.style.position = 'absolute';
-      clone.style.left = '-10000px';
-      clone.style.top = '0';
-      clone.style.width = '210mm';
-      clone.style.background = '#fff';
-      clone.style.minHeight = '297mm';
-      clone.style.padding = '18mm 16mm';
-      clone.style.boxSizing = 'border-box';
-      clone.style.color = '#000';
+      clone.removeAttribute("id");
+      clone.removeAttribute("aria-hidden");
+      clone.classList.remove("pdf-sheet");
+
+      clone.style.display = "block";
+      clone.style.position = "absolute";
+      clone.style.left = "-10000px";
+      clone.style.top = "0";
+      clone.style.width = "210mm";
+      clone.style.background = "#ffffff";
+      clone.style.minHeight = "297mm";
+      clone.style.padding = "18mm 16mm";
+      clone.style.boxSizing = "border-box";
+      clone.style.color = "#000000";
 
       document.body.appendChild(clone);
 
       html2pdf()
         .set({
           margin: [10, 10, 10, 10],
-          filename: 'cleaning-record.pdf',
-          image: { type: 'jpeg', quality: 0.95 },
+          filename: "cleaning-record.pdf",
+          image: { type: "jpeg", quality: 0.95 },
           html2canvas: {
             scale: 2,
             useCORS: true,
             allowTaint: true,
-            backgroundColor: '#ffffff',
+            backgroundColor: "#ffffff",
             scrollX: 0,
             scrollY: 0,
             windowWidth: 1200,
             logging: false
           },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["avoid-all", "css", "legacy"] }
         })
         .from(clone)
         .save()
         .then(() => {
           clone.remove();
-          noticeBox.textContent = 'Status: PDF exported.';
+          noticeBox.textContent = "Status: PDF exported.";
         })
         .catch((err) => {
           console.error(err);
           clone.remove();
-          noticeBox.textContent = 'Status: html2pdf failed. Using print fallback.';
+          noticeBox.textContent = "Status: html2pdf failed. Using print fallback.";
           window.print();
         });
     }
+
+    imageInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      previewFrame.classList.remove("empty");
+      previewFrame.innerHTML = `<img src="${url}" alt="Uploaded image">`;
+      noticeBox.textContent = "Status: image uploaded. Click Extract from image.";
+    });
+
+    ocrBtn.addEventListener("click", () => { void runOcrFromUploadedImage(); });
+
+    resetBtn.addEventListener("click", () => {
+      ensureTableRowCount(3);
+      rows().forEach((tr, i) => {
+        const inputs = tr.querySelectorAll("input");
+        inputs.forEach((input, idx) => {
+          input.value = idx === 0 ? String(i + 1).padStart(3, "0") : "";
+        });
+      });
+
+      previewFrame.className = "preview empty";
+      previewFrame.innerHTML = "Uploaded image preview";
+      imageInput.value = "";
+      docTitle.value = "Annual Cleaning Record";
+      projectName.value = "";
+      locationInput.value = "";
+      periodInput.value = "";
+      syncPdfFromUi();
+      noticeBox.textContent = "Status: reset complete.";
+    });
+
+    document.getElementById("exportPdfBtn").addEventListener("click", exportPdf);
 
     syncPdfFromUi();
   </script>
