@@ -37,8 +37,6 @@
     td input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px}
     .export-bar{display:flex;justify-content:flex-end;margin-top:10px}
     .export-btn{padding:14px 22px;min-width:160px;font-size:16px;background:#58a6b3;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.22)}
-
-    /* Hidden print target */
     .pdf-sheet{display:none;background:#fff;color:#000;padding:18mm 16mm;font-family:Arial,sans-serif;width:210mm;min-height:297mm;box-sizing:border-box}
     .pdf-company{text-align:left;font-size:13px;font-weight:700;margin-bottom:6px}
     .pdf-title{text-align:center;font-size:16px;font-weight:700;margin-bottom:10mm}
@@ -48,7 +46,6 @@
     .pdf-table th,.pdf-table td{border:1px solid #000;padding:3mm 2mm;vertical-align:middle;word-wrap:break-word}
     .pdf-table th{background:#eee;font-weight:700;text-align:center;line-height:1.2}
     .pdf-table td{text-align:center}
-
     @media (max-width:900px){
       .grid{grid-template-columns:1fr}
       .wrap{padding:14px}
@@ -56,8 +53,6 @@
       .export-bar{justify-content:stretch}
       .export-btn{width:100%}
     }
-
-    /* Fallback print path */
     @media print{
       body{background:#fff}
       .wrap > *:not(.pdf-sheet){display:none !important}
@@ -70,7 +65,7 @@
   <div class="wrap">
     <div class="header">
       <h1>Cleaning Record</h1>
-      <p>Fill project info, upload IC table screenshot, extract OCR, edit if needed, then export PDF.</p>
+      <p>Fill project details, upload a screenshot of IC table, then click Extract from image.</p>
     </div>
 
     <section class="card">
@@ -177,15 +172,8 @@
     const periodInput = document.getElementById('period');
     const ocrBtn = document.getElementById('ocrBtn');
     const resetBtn = document.getElementById('resetBtn');
-    const exportPdfBtn = document.getElementById('exportPdfBtn');
 
-    const getRows = () => Array.from(document.querySelectorAll('#ocrTableBody tr'));
-
-    function extractNumbersFromString(s) {
-      if (!s) return [];
-      const m = s.match(/-?\d+\.\d+|-?\d+/g);
-      return m ? m.map(Number) : [];
-    }
+    const rows = () => Array.from(document.querySelectorAll('#ocrTableBody tr'));
 
     function ensureTableRowCount(n) {
       const tbody = document.getElementById('ocrTableBody');
@@ -193,9 +181,10 @@
         const tr = document.createElement('tr');
         for (let c = 0; c < 8; c++) {
           const td = document.createElement('td');
-          const input = document.createElement('input');
-          input.value = c === 0 ? String(tbody.rows.length + 1).padStart(3, '0') : '';
-          td.appendChild(input);
+          const inp = document.createElement('input');
+          inp.type = 'text';
+          if (c === 0) inp.value = String(tbody.rows.length + 1).padStart(3, '0');
+          td.appendChild(inp);
           tr.appendChild(td);
         }
         tbody.appendChild(tr);
@@ -206,16 +195,104 @@
     function applyRowsToTable(rowMatrix) {
       ensureTableRowCount(Math.max(1, rowMatrix.length));
       rowMatrix.forEach((row, i) => {
-        const rowInputs = getRows()[i].querySelectorAll('input');
-        row.forEach((v, j) => {
-          if (rowInputs[j]) rowInputs[j].value = v ?? '';
+        const r = rows()[i];
+        if (!r) return;
+        const inputs = r.querySelectorAll('input');
+        row.forEach((value, j) => {
+          if (inputs[j]) inputs[j].value = value;
         });
       });
     }
 
-    function lineStartsWithLabel(line, label) {
-      const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp('^\\s*' + esc + '\\b', 'i').test(line);
+    function normalizeRowText(line) {
+      return line
+        .replace(/[|]/g, ' ')
+        .replace(/[Oo](?=\d)/g, '0')
+        .replace(/(?<=\d)[Oo]/g, '0')
+        .replace(/[,]/g, '.')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function pickMode(line) {
+      const m = line.match(/\b(Cooling|Heating|Auto|Fan)\b/i);
+      return m ? m[1] : '';
+    }
+
+    function pickIcStatus(line) {
+      const m = line.match(/\b(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF|OFF|ON)\b/i);
+      return m ? m[1].replace(/\s+/g, ' ') : '';
+    }
+
+    function parseRowByPosition(line) {
+      const clean = normalizeRowText(line);
+      const mIc = clean.match(/^\s*(\d{3})\b/);
+      if (!mIc) return null;
+
+      const nums = clean.match(/-?\d+(?:\.\d+)?/g) || [];
+      if (nums.length < 8) return null;
+
+      // Expected numeric sequence for this software table:
+      // [IC, QJ, G_No, B_No, TH1, TH2, TH3, TH4, ...]
+      const ic = nums[0];
+      const qj = nums[1] || '';
+      const th1 = nums[4] || '';
+      const th2 = nums[5] || '';
+      const th3 = nums[6] || '';
+      const th4 = nums[7] || '';
+
+      return [
+        ic,
+        qj,
+        th1,
+        th2,
+        th3,
+        th4,
+        pickMode(clean),
+        pickIcStatus(clean)
+      ];
+    }
+
+    function parseRowByCompactPattern(line) {
+      // Fallback for merged/split OCR:
+      // tries to extract IC + 6 numeric values at minimum
+      const clean = normalizeRowText(line);
+      const m = clean.match(/^\s*(\d{3})\s+(.+)$/);
+      if (!m) return null;
+
+      const ic = m[1];
+      const rest = m[2];
+      const nums = rest.match(/-?\d+(?:\.\d+)?/g) || [];
+      if (nums.length < 6) return null;
+
+      // If G_No/B_No were lost, use heuristic:
+      // QJ is usually first numeric, TH1..TH4 are next 4 realistic decimals
+      const qj = nums[0] || '';
+      const decimalCandidates = nums.filter(v => v.includes('.'));
+      let th1 = '', th2 = '', th3 = '', th4 = '';
+
+      if (decimalCandidates.length >= 4) {
+        th1 = decimalCandidates[0];
+        th2 = decimalCandidates[1];
+        th3 = decimalCandidates[2];
+        th4 = decimalCandidates[3];
+      } else {
+        th1 = nums[1] || '';
+        th2 = nums[2] || '';
+        th3 = nums[3] || '';
+        th4 = nums[4] || '';
+      }
+
+      return [
+        ic,
+        qj,
+        th1,
+        th2,
+        th3,
+        th4,
+        pickMode(clean),
+        pickIcStatus(clean)
+      ];
     }
 
     function parseIcScreenshot(ocrText) {
@@ -225,113 +302,46 @@
         .map(l => l.trim())
         .filter(Boolean);
 
-      let qj = [], th1 = [], th2 = [], th3 = [], th4 = [];
-      let modes = [], icStatuses = [], icNos = [];
-
-      function keepLonger(current, next) {
-        return next.length > current.length ? next : current;
+      // Prefer lower table region text by starting after header line containing IC/QJ/TH columns.
+      let startIdx = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const L = lines[i].toUpperCase().replace(/\s+/g, '');
+        if (L.includes('IC') && L.includes('QJ') && L.includes('TH1') && L.includes('TH2')) {
+          startIdx = i + 1;
+          break;
+        }
       }
+      const candidateLines = lines.slice(startIdx);
 
-      // Strategy A: row labels (QJ/TH1/TH2/TH3/TH4/Mode/IC S)
-      for (const line of lines) {
-        if (lineStartsWithLabel(line, 'QJ') || /^\s*Q\s*J\b/i.test(line)) {
-          const arr = extractNumbersFromString(line.replace(/^\s*Q\s*J\s*/i, '').replace(/^\s*QJ\s*/i, ''));
-          qj = keepLonger(qj, arr);
-        }
-        if (lineStartsWithLabel(line, 'TH1') || /^\s*TH\s*1\b/i.test(line)) {
-          th1 = keepLonger(th1, extractNumbersFromString(line.replace(/^\s*TH\s*1\s*/i, '')));
-        }
-        if (lineStartsWithLabel(line, 'TH2') || /^\s*TH\s*2\b/i.test(line)) {
-          th2 = keepLonger(th2, extractNumbersFromString(line.replace(/^\s*TH\s*2\s*/i, '')));
-        }
-        if (lineStartsWithLabel(line, 'TH3') || /^\s*TH\s*3\b/i.test(line)) {
-          th3 = keepLonger(th3, extractNumbersFromString(line.replace(/^\s*TH\s*3\s*/i, '')));
-        }
-        if (lineStartsWithLabel(line, 'TH4') || /^\s*TH\s*4\b/i.test(line)) {
-          th4 = keepLonger(th4, extractNumbersFromString(line.replace(/^\s*TH\s*4\s*/i, '')));
-        }
+      const extracted = [];
+      for (const rawLine of candidateLines) {
+        const line = normalizeRowText(rawLine);
 
-        if (lineStartsWithLabel(line, 'Mode')) {
-          const vals = line.replace(/^\s*Mode\s*/i, '').split(/\s+/).filter(Boolean);
-          if (vals.length > modes.length) modes = vals;
-        }
+        // Ignore upper status pane / irrelevant lines
+        if (/OPERATION|MODE=|Hz=|SCm|LEV|Etm|demand|TH7|TH8|SV1|SV2|SV3|52C|2IS4|Addr|series/i.test(line)) continue;
 
-        if (/^IC\s*S\b/i.test(line) || /^ICS\b/i.test(line)) {
-          const rest = line.replace(/^IC\s*S\s*/i, '').replace(/^ICS\s*/i, '').trim();
-          const st = [...rest.matchAll(/(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF|OFF|ON)/gi)]
-            .map(m => m[0].replace(/\s+/g, ' '));
-          if (st.length > icStatuses.length) icStatuses = st;
+        // Keep row-by-row extraction from lower IC table only
+        let row = parseRowByPosition(line);
+        if (!row) row = parseRowByCompactPattern(line);
+
+        if (row) {
+          // Deduplicate if OCR outputs the same row twice
+          const key = row.slice(0, 6).join('|');
+          const exists = extracted.some(r => r.slice(0, 6).join('|') === key);
+          if (!exists) extracted.push(row);
         }
       }
 
-      // Strategy B fallback: parse row-wise lines like
-      // 001 13 1 0 23.2 8.7 8.3 8.3 0.0 428 25.5 100 Test Cooling ON Cool ON ...
-      const rowWise = [];
-      for (const line of lines) {
-        const m = line.match(/^\s*(\d{3})\s+([\d.]+)\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
-        if (m) {
-          rowWise.push({
-            ic: m[1], qj: m[2], th1: m[3], th2: m[4], th3: m[5], th4: m[6],
-            mode: /Cooling|Heating|Auto|Fan/i.exec(line)?.[0] || '',
-            ics: /(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF|OFF|ON)/i.exec(line)?.[0] || ''
-          });
-        }
+      // Sort by IC no.
+      extracted.sort((a, b) => Number(a[0]) - Number(b[0]));
+
+      if (!extracted.length) {
+        return { ok: false, reason: 'No IC table rows recognized from lower panel.' };
       }
 
-      let n = Math.min(...[qj.length, th1.length, th2.length, th3.length, th4.length].filter(Boolean));
-      if (!Number.isFinite(n)) n = 0;
-
-      if (n === 0 && rowWise.length) {
-        n = rowWise.length;
-        icNos = rowWise.map(r => r.ic);
-        qj = rowWise.map(r => r.qj);
-        th1 = rowWise.map(r => r.th1);
-        th2 = rowWise.map(r => r.th2);
-        th3 = rowWise.map(r => r.th3);
-        th4 = rowWise.map(r => r.th4);
-        modes = rowWise.map(r => r.mode || '');
-        icStatuses = rowWise.map(r => r.ics || '');
-      }
-
-      if (n === 0) {
-        return { ok: false, reason: 'No IC table rows recognized. Please use a clearer screenshot.' };
-      }
-
-      // Find IC number row if available (001 002 003 ...)
-      const icLine = lines.find(l => /\b001\b/.test(l) && /\b002\b/.test(l));
-      if (!icNos.length && icLine) {
-        const nums = icLine.match(/\b\d{3}\b/g) || [];
-        icNos = nums.slice(0, n);
-      }
-      while (icNos.length < n) icNos.push(String(icNos.length + 1).padStart(3, '0'));
-
-      // Normalize mode / ic status lengths
-      if (modes.length > n) modes = modes.slice(0, n);
-      while (modes.length < n) modes.push(modes[modes.length - 1] || '');
-
-      if (icStatuses.length > n) icStatuses = icStatuses.slice(0, n);
-      while (icStatuses.length < n) icStatuses.push(icStatuses[icStatuses.length - 1] || '');
-
-      // Data Preview columns:
-      // [IC, QJ, TH1, TH2, TH3, TH4, Mode, IC S]
-      const rows = [];
-      for (let i = 0; i < n; i++) {
-        rows.push([
-          String(icNos[i] ?? String(i + 1).padStart(3, '0')),
-          qj[i] != null ? String(qj[i]) : '',
-          th1[i] != null ? String(th1[i]) : '',
-          th2[i] != null ? String(th2[i]) : '',
-          th3[i] != null ? String(th3[i]) : '',
-          th4[i] != null ? String(th4[i]) : '',
-          modes[i] || '',
-          icStatuses[i] || ''
-        ]);
-      }
-
-      return { ok: true, rows };
+      return { ok: true, rows: extracted };
     }
 
-    // Copy UI table values into PDF area
     function syncPdfFromUi() {
       const title = (docTitle.value || '').trim() || 'Annual Cleaning Record';
       document.getElementById('pdfDisplayTitle').textContent = title;
@@ -343,16 +353,15 @@
       const pdfBody = document.getElementById('pdfBody');
       pdfBody.textContent = '';
 
-      getRows().forEach(tr => {
+      rows().forEach((tr) => {
         const inputs = tr.querySelectorAll('input');
-        const v = idx => inputs[idx] ? String(inputs[idx].value || '').trim() : '';
+        const v = (i) => (inputs[i] && inputs[i].value != null) ? String(inputs[i].value).trim() : '';
 
-        // PDF column order:
-        // IC No., Cooling Capacity(kW), TH3, TH4, TH1, TH2, AC Mode, IC Status
+        // PDF order: IC, kW, TH3, TH4, TH1, TH2, Mode, IC S
         const ordered = [v(0), v(1), v(4), v(5), v(2), v(3), v(6), v(7)];
 
         const trOut = document.createElement('tr');
-        ordered.forEach(text => {
+        ordered.forEach((text) => {
           const td = document.createElement('td');
           td.textContent = text;
           trOut.appendChild(td);
@@ -363,48 +372,72 @@
 
     async function runOcrFromUploadedImage() {
       if (typeof Tesseract === 'undefined') {
-        noticeBox.textContent = 'Status: Tesseract.js failed to load (check network/CDN).';
+        noticeBox.textContent = 'Status: Tesseract.js failed to load (CDN/network).';
         return;
       }
-
       const img = previewFrame.querySelector('img');
       if (!img || !img.src) {
-        noticeBox.textContent = 'Status: upload screenshot first.';
+        noticeBox.textContent = 'Status: upload an IC screenshot first.';
         return;
       }
 
       ocrBtn.disabled = true;
-      noticeBox.textContent = 'Status: OCR running (first run may take 20-60s)...';
+      noticeBox.textContent = 'Status: OCR running (targeting lower IC table region)...';
 
       try {
-        const result = await Tesseract.recognize(img.src, 'eng', {
-          logger: m => {
+        // Crop bottom region to ignore top operation/status panel.
+        const sourceImg = new Image();
+        sourceImg.crossOrigin = 'anonymous';
+        sourceImg.src = img.src;
+        await new Promise((resolve, reject) => {
+          sourceImg.onload = resolve;
+          sourceImg.onerror = reject;
+        });
+
+        const cropRatioTop = 0.55; // keep lower 45% where IC table is
+        const sx = 0;
+        const sy = Math.floor(sourceImg.height * cropRatioTop);
+        const sw = sourceImg.width;
+        const sh = sourceImg.height - sy;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(sourceImg, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        const {
+          data: { text },
+        } = await Tesseract.recognize(canvas.toDataURL('image/png'), 'eng', {
+          logger: (m) => {
             if (m.status === 'recognizing text' && m.progress != null) {
               noticeBox.textContent = `Status: OCR recognition ${Math.round(m.progress * 100)}%...`;
             }
-          }
+          },
+          tessedit_pageseg_mode: '6',
+          preserve_interword_spaces: '1'
         });
 
-        const parsed = parseIcScreenshot(result.data.text || '');
+        const parsed = parseIcScreenshot(text);
         if (!parsed.ok) {
-          console.warn('OCR raw text:\n', result.data.text || '');
-          noticeBox.textContent = `Status: OCR parse failed. ${parsed.reason}`;
+          console.warn('OCR raw text:\n', text);
+          noticeBox.textContent = 'Status: parse failed. Please use a clearer screenshot (table area).';
           return;
         }
 
         applyRowsToTable(parsed.rows);
         syncPdfFromUi();
-        noticeBox.textContent = `Status: extracted ${parsed.rows.length} row(s). Please verify/edit values before export.`;
+        noticeBox.textContent = `Status: extracted ${parsed.rows.length} row(s). Please review/edit before exporting.`;
       } catch (err) {
         console.error(err);
-        noticeBox.textContent = `Status: OCR failed: ${err && err.message ? err.message : String(err)}`;
+        noticeBox.textContent = 'Status: OCR failed. ' + (err && err.message ? err.message : String(err));
       } finally {
         ocrBtn.disabled = false;
       }
     }
 
-    imageInput.addEventListener('change', e => {
-      const file = e.target.files && e.target.files[0];
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
       if (!file) return;
       const url = URL.createObjectURL(file);
       previewFrame.classList.remove('empty');
@@ -412,56 +445,48 @@
       noticeBox.textContent = 'Status: image uploaded. Click "Extract from image".';
     });
 
-    ocrBtn.addEventListener('click', () => {
-      void runOcrFromUploadedImage();
-    });
+    ocrBtn.addEventListener('click', () => { void runOcrFromUploadedImage(); });
 
     resetBtn.addEventListener('click', () => {
       ensureTableRowCount(3);
-      getRows().forEach((tr, i) => {
+      rows().forEach((tr, i) => {
         const inputs = tr.querySelectorAll('input');
-        inputs.forEach((input, idx) => {
-          input.value = idx === 0 ? String(i + 1).padStart(3, '0') : '';
-        });
+        inputs.forEach((input, idx) => { input.value = idx === 0 ? String(i + 1).padStart(3,'0') : ''; });
       });
-
       previewFrame.className = 'preview empty';
-      previewFrame.textContent = 'Uploaded image preview';
+      previewFrame.innerHTML = 'Uploaded image preview';
       imageInput.value = '';
-
       docTitle.value = 'Annual Cleaning Record';
       projectName.value = '';
       locationInput.value = '';
       periodInput.value = '';
       syncPdfFromUi();
-
       noticeBox.textContent = 'Status: reset complete.';
     });
+
+    document.getElementById('exportPdfBtn').addEventListener('click', exportPdf);
 
     function exportPdf() {
       syncPdfFromUi();
 
       if (typeof html2pdf === 'undefined') {
-        noticeBox.textContent = 'Status: html2pdf unavailable. Opening print dialog...';
+        noticeBox.textContent = 'Status: html2pdf unavailable. Using print fallback.';
         window.print();
         return;
       }
 
       const el = document.getElementById('pdfSheet');
-      const clone = el.cloneNode(true); // required
+      const clone = el.cloneNode(true);
+
       clone.removeAttribute('id');
       clone.removeAttribute('aria-hidden');
       clone.classList.remove('pdf-sheet');
-
-      // required renderable style for clone target
       clone.style.display = 'block';
       clone.style.position = 'absolute';
       clone.style.left = '-10000px';
       clone.style.top = '0';
       clone.style.width = '210mm';
       clone.style.background = '#fff';
-
-      // preserve layout consistency
       clone.style.minHeight = '297mm';
       clone.style.padding = '18mm 16mm';
       clone.style.boxSizing = 'border-box';
@@ -493,24 +518,13 @@
           clone.remove();
           noticeBox.textContent = 'Status: PDF exported.';
         })
-        .catch(err => {
+        .catch((err) => {
           console.error(err);
           clone.remove();
-          noticeBox.textContent = 'Status: html2pdf failed, switching to print fallback...';
+          noticeBox.textContent = 'Status: html2pdf failed. Using print fallback.';
           window.print();
         });
     }
-
-    exportPdfBtn.addEventListener('click', exportPdf);
-
-    // Keep PDF content synced when user edits manually
-    ['input', 'change'].forEach(evt => {
-      document.getElementById('ocrTableBody').addEventListener(evt, syncPdfFromUi);
-      docTitle.addEventListener(evt, syncPdfFromUi);
-      projectName.addEventListener(evt, syncPdfFromUi);
-      locationInput.addEventListener(evt, syncPdfFromUi);
-      periodInput.addEventListener(evt, syncPdfFromUi);
-    });
 
     syncPdfFromUi();
   </script>
