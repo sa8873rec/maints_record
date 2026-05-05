@@ -38,12 +38,13 @@
     .export-bar{display:flex;justify-content:flex-end;margin-top:10px}
     .export-btn{padding:14px 22px;min-width:160px;font-size:16px;background:#58a6b3;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.22)}
 
+    /* PDF layout (Attachment style) */
     .pdf-sheet{
       display:none;
       background:#fff;
       color:#000;
       padding:18mm 14mm;
-      font-family:"Times New Roman", Times, serif;
+      font-family:Arial, Helvetica, sans-serif;
       width:210mm;
       min-height:297mm;
       box-sizing:border-box;
@@ -138,15 +139,15 @@
           </div>
           <div class="field">
             <label for="projectName">Project Name</label>
-            <input id="projectName" type="text" placeholder="e.g. Club House FCU Cleaning" />
+            <input id="projectName" type="text" />
           </div>
           <div class="field">
             <label for="location">Location</label>
-            <input id="location" type="text" placeholder="e.g. Happy Valley" />
+            <input id="location" type="text" />
           </div>
           <div class="field">
             <label for="period">Cleaning Period</label>
-            <input id="period" type="text" placeholder="e.g. 16-3-2026 to 2-4-2026" />
+            <input id="period" type="text" />
           </div>
           <div class="field full">
             <label for="imageInput">Upload image</label>
@@ -282,8 +283,6 @@
       if (!/^\d+$/.test(s)) return s;
       const n = Number(s);
       if (!Number.isFinite(n)) return s;
-
-      // Heuristic for OCR-missed decimal: 252->25.2, 95->9.5
       if (n >= 60) {
         const repaired = (n / 10).toFixed(1);
         const rv = Number(repaired);
@@ -307,7 +306,6 @@
     function extractIcStatus(line, mode) {
       const phrase = line.match(/\b(Cool\s*ON|Heat\s*ON|Warm\s*ON|Cool\s*OFF|Heat\s*OFF)\b/i);
       if (phrase) return phrase[1].replace(/\s+/g, " ");
-
       const simple = line.match(/\b(ON|OFF)\b/i);
       if (simple) {
         const state = simple[1].toUpperCase();
@@ -326,8 +324,7 @@
       const nums = clean.match(/-?\d+(?:\.\d+)?/g) || [];
       if (nums.length < 8) return null;
 
-      // Expected sequence:
-      // [IC, QJ, G_No, B_No, TH1, TH2, TH3, TH4, ...]
+      // OCR table pattern: IC, QJ, G_No, B_No, TH1, TH2, TH3, TH4, ...
       const ic = nums[0];
       const qj = nums[1] || "";
       const th1 = repairDecimalValue(nums[4] || "");
@@ -347,7 +344,6 @@
         .map(l => l.trim())
         .filter(Boolean);
 
-      // Start after lower table header
       let startIdx = 0;
       for (let i = 0; i < lines.length; i++) {
         const t = lines[i].toUpperCase().replace(/\s+/g, "");
@@ -362,8 +358,6 @@
 
       for (const raw of candidates) {
         const line = normalizeLine(raw);
-
-        // Ignore top/system panel
         if (/OPERATION|MODE=|HZ=|SCM|LEV|ETM|DEMAND|SV1|SV2|SV3|TH7|TH8|ADDR|SERIES|PUMY|V\(V\)|I\(INPUT\)/i.test(line)) continue;
         if (/^\s*(IC|QJ|G_NO|B_NO|TH1|TH2|TH3|TH4|SH\/SC|LI|TO|SAVE|O\/F|MODE|STATE|IC\s*S|FAN)\b/i.test(line)) continue;
 
@@ -379,21 +373,22 @@
       return { ok: true, rows: extracted };
     }
 
+    // IMPORTANT: manual transfer from UI inputs -> PDF cells
     function syncPdfFromUi() {
       const title = (docTitle.value || "").trim() || "Annual Cleaning Record";
-      document.getElementById("pdfDisplayTitle").textContent = title;
-      document.getElementById("pdfProject").textContent = (projectName.value || "").trim();
-      document.getElementById("pdfLocation").textContent = (locationInput.value || "").trim();
-      document.getElementById("pdfPeriod").textContent = (periodInput.value || "").trim();
+      document.getElementById("pdfDisplayTitle").innerText = title;
+      document.getElementById("pdfProject").innerText = (projectName.value || "").trim();
+      document.getElementById("pdfLocation").innerText = (locationInput.value || "").trim();
+      document.getElementById("pdfPeriod").innerText = (periodInput.value || "").trim();
 
       const pdfBody = document.getElementById("pdfBody");
-      pdfBody.textContent = "";
+      pdfBody.innerHTML = "";
 
       rows().forEach((tr) => {
         const inputs = tr.querySelectorAll("input");
         const get = (i) => (inputs[i] && inputs[i].value != null) ? String(inputs[i].value).trim() : "";
 
-        // UI: IC,QJ,TH1,TH2,TH3,TH4,Mode,IC S
+        // UI: IC, QJ, TH1, TH2, TH3, TH4, Mode, IC S
         const ic = get(0);
         const kw = get(1);
         const th1 = formatOneDecimal(get(2));
@@ -403,16 +398,15 @@
         const mode = get(6);
         const status = get(7);
 
-        // PDF order: IC, kW, TH3, TH4, TH1, TH2, Mode, Status
-        const ordered = [ic, kw, th3, th4, th1, th2, mode, status];
-        const out = document.createElement("tr");
+        // PDF required order: IC, Cooling Capacity, TH3, TH4, TH1, TH2, AC Mode, IC Status
+        const mapped = [ic, kw, th3, th4, th1, th2, mode, status];
 
-        ordered.forEach((txt) => {
+        const out = document.createElement("tr");
+        mapped.forEach((txt) => {
           const td = document.createElement("td");
           td.innerText = txt;
           out.appendChild(td);
         });
-
         pdfBody.appendChild(out);
       });
     }
@@ -484,6 +478,7 @@
     }
 
     function exportPdf() {
+      // Always refresh PDF content from current UI values first.
       syncPdfFromUi();
 
       const pdfSheet = document.getElementById("pdfSheet");
@@ -497,7 +492,7 @@
         visibility: pdfSheet.style.visibility
       };
 
-      // Make source section renderable before clone
+      // Make source renderable for capture
       pdfSheet.style.display = "block";
       pdfSheet.style.position = "absolute";
       pdfSheet.style.left = "-10000px";
@@ -506,6 +501,7 @@
       pdfSheet.style.background = "#ffffff";
       pdfSheet.style.visibility = "hidden";
 
+      // Clone final populated template
       const clone = pdfSheet.cloneNode(true);
       clone.removeAttribute("id");
       clone.removeAttribute("aria-hidden");
