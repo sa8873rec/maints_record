@@ -3,18 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cleaning Record Pro</title>
+  <title>Cleaning Record Pro - Fixed</title>
   <style>
     :root {
       --primary: #0f766e; --primary2: #0b5f59; --bg: #f5f7fa; --card: #fff;
       --line: #d9dee7; --text: #1f2937; --muted: #6b7280; --radius: 12px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+    body { font-family: -apple-system, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
     .wrap { max-width: 1100px; margin: 0 auto; }
-    .header { margin-bottom: 24px; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-    .card-head { font-size: 1.25rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    .card-head { font-size: 1.2rem; font-weight: 700; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .field { display: flex; flex-direction: column; gap: 6px; }
     .field.full { grid-column: 1 / -1; }
@@ -25,41 +24,28 @@
     .actions { display: flex; gap: 12px; margin-top: 15px; }
     button { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; transition: 0.2s; }
     .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: var(--primary2); }
     .btn-ghost { background: #fff; border: 1px solid var(--line); }
     .table-wrap { overflow-x: auto; margin-top: 10px; }
-    table { width: 100%; border-collapse: collapse; min-width: 800px; }
-    th, td { border: 1px solid var(--line); padding: 10px; text-align: center; font-size: 13px; }
-    th { background: #f8fafc; }
-    .export-bar { display: flex; justify-content: flex-end; }
-    .btn-export { background: #58a6b3; color: white; padding: 15px 30px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th, td { border: 1px solid var(--line); padding: 10px; text-align: center; }
+    th { background: #f8fafc; font-size: 13px; }
+    td input { width: 100%; border: none; text-align: center; font-size: 14px; outline: none; }
+    .export-bar { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .btn-export { background: #58a6b3; color: white; padding: 15px 30px; font-size: 16px; box-shadow: 0 4px 12px rgba(88,166,179,0.3); }
 
-    /* PDF 專用隱藏樣式：平時絕對不顯示，也不佔空間 */
-    #pdf-render-container {
-      position: absolute;
-      left: -9999px;
-      top: 0;
-      width: 210mm;
-      background: white;
-    }
-
-    .pdf-sheet {
-      padding: 15mm;
-      background: #fff !important;
-      color: #000 !important;
-      font-family: Arial, sans-serif;
-    }
-    .pdf-header { font-size: 14pt; font-weight: bold; margin-bottom: 20px; text-align: left; }
+    /* PDF 渲染專用樣式 - 修正排版問題 */
+    #pdf-render-container { position: absolute; left: -9999px; top: 0; width: 210mm; }
+    .pdf-sheet { padding: 15mm 12mm; background: #fff; color: #000; }
+    .pdf-header { font-size: 14pt; font-weight: bold; margin-bottom: 25px; }
     .pdf-title-box { text-align: center; margin-bottom: 25px; }
-    .pdf-title { font-size: 18pt; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px; display: inline-block; }
+    .pdf-title { font-size: 18pt; font-weight: bold; border-bottom: 1.5pt solid #000; padding-bottom: 5px; display: inline-block; }
     .pdf-meta { margin-bottom: 20px; font-size: 11pt; }
-    .pdf-meta-row { display: flex; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
-    .pdf-label { font-weight: bold; width: 150px; }
-    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .pdf-table th, .pdf-table td { border: 1px solid #000 !important; padding: 6px 4px; font-size: 9pt; }
-    .pdf-table th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
-
-    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    .pdf-meta-row { display: flex; margin-bottom: 10px; align-items: flex-end; }
+    .pdf-label { font-weight: bold; width: 45mm; border-bottom: none; }
+    .pdf-value { flex: 1; border-bottom: 1pt solid #000; padding-left: 5px; min-height: 18px; }
+    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    .pdf-table th, .pdf-table td { border: 0.5pt solid #000 !important; padding: 8px 4px; font-size: 9pt; text-align: center; word-wrap: break-word; }
+    .pdf-table th { background-color: #f2f2f2 !important; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -67,21 +53,19 @@
   <div class="wrap">
     <div class="header">
       <h1>Cleaning Record Tool</h1>
-      <p>Upload screenshot and export professional PDF report.</p>
     </div>
 
-    <!-- 輸入區 -->
     <section class="card">
       <div class="card-head">Document Info</div>
       <div class="grid">
         <div class="field"><label>Report Title</label><input type="text" id="docTitle" value="Annual Cleaning Record"></div>
         <div class="field"><label>Project Name</label><input type="text" id="projectName" placeholder="Enter project name"></div>
         <div class="field"><label>Location</label><input type="text" id="location" placeholder="Building/Floor"></div>
-        <div class="field"><label>Period</label><input type="text" id="period" placeholder="e.g. 2024 Q1"></div>
+        <div class="field"><label>Period</label><input type="text" id="period" placeholder="e.g. 2024-05"></div>
         <div class="field full">
           <label>IC Data Screenshot</label>
           <input type="file" id="imageInput" accept="image/*">
-          <div class="preview" id="previewFrame">No image uploaded</div>
+          <div class="preview" id="previewFrame">Upload IC screenshot to start</div>
         </div>
       </div>
       <div class="actions">
@@ -91,9 +75,8 @@
       <div id="noticeBox" style="margin-top:10px; font-size:13px; color:var(--primary);">Status: Ready</div>
     </section>
 
-    <!-- 預覽編輯區 -->
     <section class="card">
-      <div class="card-head">Data Editor (Interactive)</div>
+      <div class="card-head">Data Editor</div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -101,9 +84,7 @@
               <th>IC No.</th><th>QJ (kW)</th><th>TH1 (Ret)</th><th>TH2 (Pipe)</th><th>TH3 (Sup)</th><th>TH4 (Sup2)</th><th>Mode</th><th>Status</th>
             </tr>
           </thead>
-          <tbody id="ocrTableBody">
-            <!-- JS 動態生成 -->
-          </tbody>
+          <tbody id="ocrTableBody"></tbody>
         </table>
       </div>
     </section>
@@ -113,25 +94,25 @@
     </div>
   </div>
 
-  <!-- PDF 渲染容器 (離屏繪製) -->
+  <!-- PDF 渲染容器 -->
   <div id="pdf-render-container">
     <div class="pdf-sheet" id="pdfSheet">
       <div class="pdf-header">REC Engineering Contracting Company Limited</div>
       <div class="pdf-title-box"><div class="pdf-title" id="pdfDisplayTitle"></div></div>
       <div class="pdf-meta">
-        <div class="pdf-meta-row"><span class="pdf-label">Project Name:</span><span id="pdfProject"></span></div>
-        <div class="pdf-meta-row"><span class="pdf-label">Location:</span><span id="pdfLocation"></span></div>
-        <div class="pdf-meta-row"><span class="pdf-label">Cleaning Period:</span><span id="pdfPeriod"></span></div>
+        <div class="pdf-meta-row"><span class="pdf-label">Project Name :</span><span class="pdf-value" id="pdfProject"></span></div>
+        <div class="pdf-meta-row"><span class="pdf-label">Location :</span><span class="pdf-value" id="pdfLocation"></span></div>
+        <div class="pdf-meta-row"><span class="pdf-label">Cleaning Period :</span><span class="pdf-value" id="pdfPeriod"></span></div>
       </div>
       <table class="pdf-table">
         <thead>
           <tr>
             <th style="width:10%">IC No.</th>
-            <th style="width:12%">Cap.(kW)</th>
-            <th style="width:13%">TH3(Sup)°C</th>
-            <th style="width:13%">TH4(Sup)°C</th>
-            <th style="width:13%">TH1(Ret)°C</th>
-            <th style="width:13%">TH2(Pipe)°C</th>
+            <th style="width:12%">Cooling Capacity (kW)</th>
+            <th style="width:13%">Air Supply Temp°C (TH3)</th>
+            <th style="width:13%">Air Supply Temp°C (TH4)</th>
+            <th style="width:13%">Air Return Temp°C (TH1)</th>
+            <th style="width:13%">Pipe Outlet Temp°C (TH2)</th>
             <th style="width:13%">AC Mode</th>
             <th style="width:13%">IC Status</th>
           </tr>
@@ -141,66 +122,88 @@
     </div>
   </div>
 
-  <!-- 依賴庫 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <script>
-    // 初始化表格
-    const tbody = document.getElementById('ocrTableBody');
-    function initTable(rows = 3) {
-      tbody.innerHTML = '';
-      for(let i=1; i<=rows; i++) {
+    const ocrTableBody = document.getElementById('ocrTableBody');
+    const noticeBox = document.getElementById('noticeBox');
+
+    // 初始化 3 行空白表格
+    function initTable(data = []) {
+      ocrTableBody.innerHTML = '';
+      const displayData = data.length > 0 ? data : [['001','','','','','','',''],['002','','','','','','',''],['003','','','','','','','']];
+      displayData.forEach(rowData => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><input type="text" value="${String(i).padStart(3,'0')}"></td>
-          <td><input type="text"></td><td><input type="text"></td><td><input type="text"></td>
-          <td><input type="text"></td><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td>
-        `;
-        tbody.appendChild(tr);
-      }
+        rowData.forEach(val => {
+          const td = document.createElement('td');
+          td.innerHTML = `<input type="text" value="${val}">`;
+          tr.appendChild(td);
+        });
+        ocrTableBody.appendChild(tr);
+      });
     }
     initTable();
 
-    // 圖片上傳預覽
+    // 圖片預覽
     document.getElementById('imageInput').onchange = (e) => {
       const file = e.target.files[0];
       if(!file) return;
       const url = URL.createObjectURL(file);
       document.getElementById('previewFrame').innerHTML = `<img src="${url}" id="targetImg">`;
+      noticeBox.innerText = "Status: Image loaded. Click 'Extract' to process.";
     };
 
-    // OCR 核心邏輯
+    // --- 強力解析引擎 ---
+    function parseCleaningData(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+      const results = [];
+      lines.forEach(line => {
+        // 匹配 IC 編號開頭的行 (如 025 20 25 0...)
+        const match = line.match(/^(\d{3})\s+(\d+)\s+.*?\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+/);
+        if (match) {
+          const ic = match[1];
+          const qj = match[2];
+          const th1 = match[3];
+          const th2 = match[4];
+          const th3 = match[5];
+          const th4 = match[6];
+          const mode = line.includes('Cooling') ? 'Cooling' : (line.includes('Heating') ? 'Heating' : '');
+          const status = line.includes('Cool ON') ? 'Cool ON' : (line.includes('Cool OFF') ? 'Cool OFF' : '');
+          results.push([ic, qj, th1, th2, th3, th4, mode, status]);
+        }
+      });
+      return results;
+    }
+
     document.getElementById('ocrBtn').onclick = async () => {
       const img = document.getElementById('targetImg');
       if(!img) return alert("Please upload a screenshot first!");
       
-      const btn = document.getElementById('ocrBtn');
-      const notice = document.getElementById('noticeBox');
-      btn.disabled = true;
-      notice.innerText = "Status: Initializing OCR Engine...";
+      noticeBox.innerText = "Status: Analyzing image (OCR)...";
+      document.getElementById('ocrBtn').disabled = true;
 
       try {
-        const worker = await Tesseract.createWorker('eng');
-        const { data: { text } } = await worker.recognize(img.src);
-        await worker.terminate();
+        const { data: { text } } = await Tesseract.recognize(img.src, 'eng');
+        const parsedRows = parseCleaningData(text);
         
-        notice.innerText = "Status: Data Processed. Please verify the table.";
-        // 此處簡化處理，實際解析邏輯可按需加入
-        console.log("OCR Result:", text);
+        if(parsedRows.length > 0) {
+          initTable(parsedRows);
+          noticeBox.innerText = `Status: Success! Extracted ${parsedRows.length} rows.`;
+        } else {
+          noticeBox.innerText = "Status: No IC data found. Please try a clearer screenshot.";
+          console.log("Raw Text:", text);
+        }
       } catch (e) {
-        notice.innerText = "Status: Error in OCR.";
+        noticeBox.innerText = "Status: OCR Error.";
       } finally {
-        btn.disabled = false;
+        document.getElementById('ocrBtn').disabled = false;
       }
     };
 
-    // PDF 匯出核心
+    // --- PDF 導出與同步 ---
     document.getElementById('exportPdfBtn').onclick = async () => {
-      const notice = document.getElementById('noticeBox');
-      notice.innerText = "Status: Generating PDF...";
-
-      // 1. 同步數據到隱藏的 PDF 模板
+      // 1. 同步數據
       document.getElementById('pdfDisplayTitle').innerText = document.getElementById('docTitle').value;
       document.getElementById('pdfProject').innerText = document.getElementById('projectName').value;
       document.getElementById('pdfLocation').innerText = document.getElementById('location').value;
@@ -209,51 +212,39 @@
       const pdfBody = document.getElementById('pdfBody');
       pdfBody.innerHTML = '';
       
-      // 獲取編輯器中的所有行
       const rows = document.querySelectorAll('#ocrTableBody tr');
       rows.forEach(row => {
-        const ins = row.querySelectorAll('input');
+        const inputs = row.querySelectorAll('input');
         const tr = document.createElement('tr');
-        // 對應 PDF 表格順序：IC, QJ(1), TH3(4), TH4(5), TH1(2), TH2(3), Mode, Status
-        const vals = [ins[0].value, ins[1].value, ins[4].value, ins[5].value, ins[2].value, ins[3].value, ins[6].value, ins[7].value];
-        vals.forEach(v => {
+        // 同步 8 個欄位數據
+        for(let i=0; i<8; i++) {
           const td = document.createElement('td');
-          td.innerText = v || '-';
+          td.innerText = inputs[i].value || '-';
           tr.appendChild(td);
-        });
+        }
         pdfBody.appendChild(tr);
       });
 
-      // 2. 執行導出
+      // 2. 導出
       const element = document.getElementById('pdfSheet');
       const opt = {
-        margin: [10, 10],
-        filename: `Cleaning_Record_${new Date().getTime()}.pdf`,
+        margin: 0,
+        filename: `Cleaning_Record_${document.getElementById('projectName').value || 'Report'}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 3, 
-          useCORS: true, 
-          letterRendering: true,
-          scrollY: 0
-        },
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
+      noticeBox.innerText = "Status: Generating PDF...";
       try {
-        // 使用從 DOM 獲取的實體元素進行渲染
         await html2pdf().set(opt).from(element).save();
-        notice.innerText = "Status: PDF Exported Successfully!";
+        noticeBox.innerText = "Status: PDF Exported Successfully!";
       } catch (err) {
-        console.error(err);
-        alert("PDF Export Failed, check console.");
+        alert("Export failed.");
       }
     };
 
-    document.getElementById('resetBtn').onclick = () => {
-      if(confirm("Clear all data?")) {
-        location.reload();
-      }
-    };
+    document.getElementById('resetBtn').onclick = () => location.reload();
   </script>
 </body>
 </html>
