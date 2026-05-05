@@ -45,9 +45,9 @@
       padding:18mm 14mm;
       font-family:Arial, Helvetica, sans-serif;
       width:210mm;
-      min-height:297mm;
+      height:auto;
       box-sizing:border-box;
-      overflow:visible;
+      overflow:visible !important;
     }
     .pdf-company{
       text-align:left;
@@ -104,6 +104,12 @@
     .pdf-table th{
       font-weight:700;
       line-height:1.15;
+    }
+
+    .pdf-table,
+    .pdf-table th,
+    .pdf-table td {
+      border: 1px solid black !important;
     }
 
     @media (max-width:900px){
@@ -397,14 +403,14 @@
         const val = (i) => (inputs[i] ? String(inputs[i].value || "").trim() : "");
 
         const mapped = [
-          val(0),          // IC
-          val(1),          // QJ
-          fmtTemp(val(4)), // TH3
-          fmtTemp(val(5)), // TH4
-          fmtTemp(val(2)), // TH1
-          fmtTemp(val(3)), // TH2
-          val(6),          // Mode
-          val(7)           // Status
+          val(0),
+          val(1),
+          fmtTemp(val(4)),
+          fmtTemp(val(5)),
+          fmtTemp(val(2)),
+          fmtTemp(val(3)),
+          val(6),
+          val(7)
         ];
 
         const out = document.createElement("tr");
@@ -507,7 +513,8 @@
         width: pdfSheet.style.width,
         background: pdfSheet.style.background,
         zIndex: pdfSheet.style.zIndex,
-        visibility: pdfSheet.style.visibility
+        visibility: pdfSheet.style.visibility,
+        opacity: pdfSheet.style.opacity
       };
 
       pdfSheet.style.display = "block";
@@ -518,6 +525,9 @@
       pdfSheet.style.background = "#ffffff";
       pdfSheet.style.zIndex = "-1";
       pdfSheet.style.visibility = "visible";
+      pdfSheet.style.opacity = "1";
+      pdfSheet.style.setProperty("visibility", "visible", "important");
+      pdfSheet.style.setProperty("opacity", "1", "important");
 
       const restoreSheetStyle = () => {
         pdfSheet.style.display = "none";
@@ -528,6 +538,7 @@
         pdfSheet.style.background = "";
         pdfSheet.style.zIndex = "";
         pdfSheet.style.visibility = "";
+        pdfSheet.style.opacity = "";
 
         if (prev.display) pdfSheet.style.display = prev.display;
         if (prev.position) pdfSheet.style.position = prev.position;
@@ -537,9 +548,12 @@
         if (prev.background) pdfSheet.style.background = prev.background;
         if (prev.zIndex) pdfSheet.style.zIndex = prev.zIndex;
         if (prev.visibility) pdfSheet.style.visibility = prev.visibility;
+        if (prev.opacity) pdfSheet.style.opacity = prev.opacity;
       };
 
       setTimeout(() => {
+        console.log("PDF Table Rows:", pdfBody.innerHTML);
+
         html2pdf()
           .set({
             margin: [8, 8, 8, 8],
@@ -568,7 +582,7 @@
             restoreSheetStyle();
             alert("PDF export failed. Please check console logs.");
           });
-      }, 100);
+      }, 500);
     }
 
     imageInput.addEventListener("change", (e) => {
