@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>REC Cleaning Record - Ultimate Fix</title>
+  <title>REC Cleaning Record - Exact Header Fix</title>
   <style>
+    /* 全局 Times New Roman */
     * { box-sizing: border-box; font-family: "Times New Roman", Times, serif; }
     body { background: #f0f4f8; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-    .main-box { width: 100%; max-width: 1000px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    h2 { color: #0f766e; border-bottom: 2px solid #0f766e; padding-bottom: 10px; }
+    .main-box { width: 100%; max-width: 1100px; background: #fff; padding: 25px; border-radius: 8px; }
     
     .input-area { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
     .field { display: flex; flex-direction: column; font-size: 14px; font-weight: bold; }
@@ -17,31 +17,35 @@
     button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
     .btn-ocr { background: #0f766e; color: white; }
     .btn-pdf { background: #58a6b3; color: white; margin-left: auto; }
-    .status { font-size: 13px; color: #666; }
 
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-    th { background: #f8f9fa; font-size: 13px; }
-    td input { width: 100%; border: none; text-align: center; font-size: 15px; background: #fffbe6; } /* 高亮輸入框 */
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+    th { background: #f8f9fa; font-size: 12px; }
+    td input { width: 100%; border: none; text-align: center; font-size: 15px; background: #fffbe6; }
 
-    /* PDF 樣式強制修正 */
-    #pdf-wrapper { position: absolute; left: -9999px; width: 185mm; } /* 縮窄寬度確保不被切 */
+    /* PDF 強制樣式：還原文字 & 確保不切斷 */
+    #pdf-wrapper { position: absolute; left: -9999px; width: 195mm; } 
     .pdf-sheet { padding: 10mm; background: white; color: black; }
-    .pdf-title { text-align: center; font-size: 22pt; font-weight: bold; text-decoration: underline; margin: 20px 0; }
-    .pdf-meta { margin-bottom: 15px; font-size: 12pt; border-bottom: 1px solid #000; padding-bottom: 10px; }
+    .pdf-header { font-size: 18pt; font-weight: bold; margin-bottom: 10px; }
+    .pdf-title-box { text-align: center; margin: 20px 0; }
+    .pdf-title { font-size: 24pt; font-weight: bold; text-decoration: underline; display: inline-block; }
+    .pdf-meta { font-size: 13pt; line-height: 1.6; margin-bottom: 15px; }
+    
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .pdf-table th, .pdf-table td { border: 0.5pt solid black !important; padding: 4px 2px; font-size: 9pt; text-align: center; word-wrap: break-word; }
+    /* 這裡還原了表格邊框和文字大小 */
+    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 4px 1px; font-size: 9pt; text-align: center; }
+    .pdf-table th { background: #ffffff !important; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <div class="main-box">
-  <h2>REC Annual Cleaning Record Tool</h2>
+  <h2 style="color:#0f766e">REC Annual Cleaning Record (Header Restored)</h2>
   
   <div class="input-area">
     <div class="field">Project Name<input type="text" id="pName"></div>
     <div class="field">Location<input type="text" id="pLoc"></div>
-    <div class="field">Period<input type="text" id="pTime"></div>
+    <div class="field">Cleaning Period<input type="text" id="pTime"></div>
   </div>
 
   <div class="field" style="margin-bottom:15px;">
@@ -49,42 +53,44 @@
   </div>
 
   <div class="controls">
-    <button class="btn-ocr" id="runOcr">1. Extract & Auto-Fix</button>
-    <span class="status" id="msg">Ready. TH values > 50 will be auto-corrected.</span>
+    <button class="btn-ocr" id="runOcr">1. Extract Data & Fix Decimals</button>
+    <span id="msg" style="font-size:13px; color:#666;">Ready. Header text matched to original.</span>
     <button class="btn-pdf" id="genPdf">2. Download PDF</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>IC No.</th><th>QJ (kW)</th><th>TH1(Ret)</th><th>TH2(Pipe)</th><th>TH3(Sup)</th><th>TH4(Sup2)</th><th>Mode</th><th>Status</th>
+        <th>IC No.</th><th>Cooling Capacity(kW)</th><th>TH1 (Ret)</th><th>TH2 (Pipe)</th><th>TH3 (Sup)</th><th>TH4 (Sup2)</th><th>Mode</th><th>Status</th>
       </tr>
     </thead>
     <tbody id="tableBody"></tbody>
   </table>
 </div>
 
-<!-- 隱藏的 PDF 渲染區域 -->
+<!-- PDF 渲染層 -->
 <div id="pdf-wrapper">
   <div class="pdf-sheet" id="pdfTemplate">
-    <div style="font-size:14pt; font-weight:bold;">REC Engineering Contracting Company Limited</div>
-    <div class="pdf-title">Annual Cleaning Record</div>
+    <div class="pdf-header">REC Engineering Contracting Company Limited</div>
+    <div class="pdf-title-box"><span class="pdf-title">Annual Cleaning Record</span></div>
+    
     <div class="pdf-meta">
-      <div><strong>Project Name :</strong> <span id="outName"></span></div>
-      <div><strong>Location :</strong> <span id="outLoc"></span></div>
-      <div><strong>Cleaning Period :</strong> <span id="outTime"></span></div>
+      <div><strong>Project Name : </strong> <span id="outName"></span></div>
+      <div><strong>Location : </strong> <span id="outLoc"></span></div>
+      <div><strong>Cleaning Period : </strong> <span id="outTime"></span></div>
     </div>
+
     <table class="pdf-table">
       <thead>
         <tr>
           <th style="width:10%">IC No.</th>
-          <th style="width:10%">Capacity(kW)</th>
-          <th style="width:14%">TH3 (Sup) °C</th>
-          <th style="width:14%">TH4 (Sup2) °C</th>
-          <th style="width:14%">TH1 (Ret) °C</th>
-          <th style="width:14%">TH2 (Pipe) °C</th>
-          <th style="width:12%">Mode</th>
-          <th style="width:12%">Status</th>
+          <th style="width:12%">Cooling Capacity (kW)</th>
+          <th style="width:14%">Cooling Air Supply Temp °C (TH3)</th>
+          <th style="width:14%">Cooling Air Supply Temp °C (TH4)</th>
+          <th style="width:14%">Cooling Air Return Temp °C (TH1)</th>
+          <th style="width:14%">Pipe Outlet Temp °C (TH2)</th>
+          <th style="width:11%">AC Mode</th>
+          <th style="width:11%">IC Status</th>
         </tr>
       </thead>
       <tbody id="outBody"></tbody>
@@ -96,10 +102,10 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-  // 強制修正邏輯：如果數字大於 50 且沒有小數點，自動除以 10
-  function smartFormat(val) {
+  // 智慧補小數點邏輯
+  function smartFix(val) {
     if(!val) return '';
-    let n = val.replace(/[^0-9.]/g, ''); // 只保留數字和點
+    let n = val.replace(/[^0-9.]/g, ''); 
     if (n.length >= 2 && !n.includes('.') && parseFloat(n) > 50) {
       return (parseFloat(n) / 10).toFixed(1);
     }
@@ -117,8 +123,8 @@
   document.getElementById('runOcr').onclick = async () => {
     const file = document.getElementById('imgFile').files[0];
     if(!file) return alert("Please upload image!");
+    document.getElementById('msg').innerText = "OCR Processing...";
     
-    document.getElementById('msg').innerText = "Analyzing & Correcting...";
     const { data: { text } } = await Tesseract.recognize(file, 'eng');
     const lines = text.split('\n').filter(l => l.trim().length > 15);
     
@@ -126,19 +132,10 @@
     lines.forEach(line => {
       const p = line.split(/\s+/).filter(x => x.length > 0);
       if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-        // 抓取對應欄位並立即進行小數點修正
-        addRow([
-          p[0], 
-          p[1].replace(',',''), 
-          smartFormat(p[4]), // TH1
-          smartFormat(p[5]), // TH2
-          smartFormat(p[6]), // TH3
-          smartFormat(p[7]), // TH4
-          "Cooling", "Cool ON"
-        ]);
+        addRow([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[5]), smartFix(p[6]), smartFix(p[7]), "Cooling", "Cool ON"]);
       }
     });
-    document.getElementById('msg').innerText = "Extraction complete. Values > 50 auto-fixed.";
+    document.getElementById('msg').innerText = "Done. All TH values fixed.";
   };
 
   document.getElementById('genPdf').onclick = async () => {
@@ -158,8 +155,8 @@
     });
 
     const opt = {
-      margin: 5,
-      filename: 'REC_Report.pdf',
+      margin: 2,
+      filename: 'Annual_Cleaning_Record.pdf',
       html2canvas: { scale: 3 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
