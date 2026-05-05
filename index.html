@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>REC Cleaning Record - Exact Header Fix</title>
+  <title>REC Cleaning Record - Final Header Clean</title>
   <style>
-    /* 全局 Times New Roman */
     * { box-sizing: border-box; font-family: "Times New Roman", Times, serif; }
-    body { background: #f0f4f8; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-    .main-box { width: 100%; max-width: 1100px; background: #fff; padding: 25px; border-radius: 8px; }
+    body { background: #f4f7f9; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .main-box { width: 100%; max-width: 1100px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     
     .input-area { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
     .field { display: flex; flex-direction: column; font-size: 14px; font-weight: bold; }
@@ -23,7 +22,7 @@
     th { background: #f8f9fa; font-size: 12px; }
     td input { width: 100%; border: none; text-align: center; font-size: 15px; background: #fffbe6; }
 
-    /* PDF 強制樣式：還原文字 & 確保不切斷 */
+    /* PDF 渲染層：刪除括號字眼 */
     #pdf-wrapper { position: absolute; left: -9999px; width: 195mm; } 
     .pdf-sheet { padding: 10mm; background: white; color: black; }
     .pdf-header { font-size: 18pt; font-weight: bold; margin-bottom: 10px; }
@@ -32,20 +31,19 @@
     .pdf-meta { font-size: 13pt; line-height: 1.6; margin-bottom: 15px; }
     
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    /* 這裡還原了表格邊框和文字大小 */
-    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 4px 1px; font-size: 9pt; text-align: center; }
-    .pdf-table th { background: #ffffff !important; font-weight: bold; }
+    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 6px 2px; font-size: 9pt; text-align: center; }
+    .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.2; }
   </style>
 </head>
 <body>
 
 <div class="main-box">
-  <h2 style="color:#0f766e">REC Annual Cleaning Record (Header Restored)</h2>
+  <h2 style="color:#0f766e">REC Annual Cleaning Record (Clean Header)</h2>
   
   <div class="input-area">
-    <div class="field">Project Name<input type="text" id="pName"></div>
-    <div class="field">Location<input type="text" id="pLoc"></div>
-    <div class="field">Cleaning Period<input type="text" id="pTime"></div>
+    <div class="field">Project Name<input type="text" id="pName" placeholder="e.g. 1326"></div>
+    <div class="field">Location<input type="text" id="pLoc" placeholder="e.g. 1238y7"></div>
+    <div class="field">Cleaning Period<input type="text" id="pTime" placeholder="e.g. 12873e321"></div>
   </div>
 
   <div class="field" style="margin-bottom:15px;">
@@ -53,22 +51,22 @@
   </div>
 
   <div class="controls">
-    <button class="btn-ocr" id="runOcr">1. Extract Data & Fix Decimals</button>
-    <span id="msg" style="font-size:13px; color:#666;">Ready. Header text matched to original.</span>
+    <button class="btn-ocr" id="runOcr">1. Extract & Auto-Fix</button>
+    <span id="msg" style="font-size:13px; color:#666;">Ready. (THx) labels removed from PDF header.</span>
     <button class="btn-pdf" id="genPdf">2. Download PDF</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>IC No.</th><th>Cooling Capacity(kW)</th><th>TH1 (Ret)</th><th>TH2 (Pipe)</th><th>TH3 (Sup)</th><th>TH4 (Sup2)</th><th>Mode</th><th>Status</th>
+        <th>IC No.</th><th>Capacity(kW)</th><th>TH1 (Ret)</th><th>TH2 (Pipe)</th><th>TH3 (Sup)</th><th>TH4 (Sup2)</th><th>Mode</th><th>Status</th>
       </tr>
     </thead>
     <tbody id="tableBody"></tbody>
   </table>
 </div>
 
-<!-- PDF 渲染層 -->
+<!-- PDF 渲染層：表頭字眼已清理 -->
 <div id="pdf-wrapper">
   <div class="pdf-sheet" id="pdfTemplate">
     <div class="pdf-header">REC Engineering Contracting Company Limited</div>
@@ -85,10 +83,10 @@
         <tr>
           <th style="width:10%">IC No.</th>
           <th style="width:12%">Cooling Capacity (kW)</th>
-          <th style="width:14%">Cooling Air Supply Temp °C (TH3)</th>
-          <th style="width:14%">Cooling Air Supply Temp °C (TH4)</th>
-          <th style="width:14%">Cooling Air Return Temp °C (TH1)</th>
-          <th style="width:14%">Pipe Outlet Temp °C (TH2)</th>
+          <th style="width:14%">Cooling Air Supply Temp °C</th> <!-- 刪除 (TH3) -->
+          <th style="width:14%">Cooling Air Supply Temp °C</th> <!-- 刪除 (TH4) -->
+          <th style="width:14%">Cooling Air Return Temp °C</th> <!-- 刪除 (TH1) -->
+          <th style="width:14%">Pipe Outlet Temp °C</th>        <!-- 刪除 (TH2) -->
           <th style="width:11%">AC Mode</th>
           <th style="width:11%">IC Status</th>
         </tr>
@@ -102,7 +100,6 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-  // 智慧補小數點邏輯
   function smartFix(val) {
     if(!val) return '';
     let n = val.replace(/[^0-9.]/g, ''); 
@@ -123,7 +120,7 @@
   document.getElementById('runOcr').onclick = async () => {
     const file = document.getElementById('imgFile').files[0];
     if(!file) return alert("Please upload image!");
-    document.getElementById('msg').innerText = "OCR Processing...";
+    document.getElementById('msg').innerText = "Extracting data...";
     
     const { data: { text } } = await Tesseract.recognize(file, 'eng');
     const lines = text.split('\n').filter(l => l.trim().length > 15);
@@ -135,7 +132,7 @@
         addRow([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[5]), smartFix(p[6]), smartFix(p[7]), "Cooling", "Cool ON"]);
       }
     });
-    document.getElementById('msg').innerText = "Done. All TH values fixed.";
+    document.getElementById('msg').innerText = "Done. (THx) labels removed from output.";
   };
 
   document.getElementById('genPdf').onclick = async () => {
@@ -148,7 +145,7 @@
     document.querySelectorAll('#tableBody tr').forEach(tr => {
       const inp = tr.querySelectorAll('input');
       const row = document.createElement('tr');
-      // 輸出順序對標附件：IC, QJ, TH3, TH4, TH1, TH2, Mode, Status
+      // 保持數據對應邏輯：IC, QJ, TH3, TH4, TH1, TH2, Mode, Status
       const vals = [inp[0].value, inp[1].value, inp[4].value, inp[5].value, inp[2].value, inp[3].value, inp[6].value, inp[7].value];
       vals.forEach(v => row.innerHTML += `<td>${v}</td>`);
       outBody.appendChild(row);
@@ -156,7 +153,7 @@
 
     const opt = {
       margin: 2,
-      filename: 'Annual_Cleaning_Record.pdf',
+      filename: 'REC_Cleaning_Record_Clean.pdf',
       html2canvas: { scale: 3 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
