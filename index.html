@@ -40,13 +40,14 @@
 
     .pdf-sheet{
       display:none;
-      background:#fff;
+      background:#ffffff !important;
       color:#000;
       padding:18mm 14mm;
       font-family:Arial, Helvetica, sans-serif;
       width:210mm;
       min-height:297mm;
       box-sizing:border-box;
+      overflow:visible;
     }
     .pdf-company{
       text-align:left;
@@ -365,6 +366,10 @@
     }
 
     function syncPdfFromUi() {
+      if (document.activeElement && typeof document.activeElement.blur === "function") {
+        document.activeElement.blur();
+      }
+
       const title = (document.getElementById("docTitle").value || "").trim() || "Annual Cleaning Record";
       const project = (document.getElementById("projectName").value || "").trim();
       const location = (document.getElementById("location").value || "").trim();
@@ -391,16 +396,16 @@
         const inputs = tr.querySelectorAll("input");
         const val = (i) => (inputs[i] ? String(inputs[i].value || "").trim() : "");
 
-        const ic = val(0);
-        const qj = val(1);
-        const th1 = fmtTemp(val(2));
-        const th2 = fmtTemp(val(3));
-        const th3 = fmtTemp(val(4));
-        const th4 = fmtTemp(val(5));
-        const mode = val(6);
-        const status = val(7);
-
-        const mapped = [ic, qj, th3, th4, th1, th2, mode, status];
+        const mapped = [
+          val(0),          // IC
+          val(1),          // QJ
+          fmtTemp(val(4)), // TH3
+          fmtTemp(val(5)), // TH4
+          fmtTemp(val(2)), // TH1
+          fmtTemp(val(3)), // TH2
+          val(6),          // Mode
+          val(7)           // Status
+        ];
 
         const out = document.createElement("tr");
         mapped.forEach((text) => {
@@ -534,34 +539,36 @@
         if (prev.visibility) pdfSheet.style.visibility = prev.visibility;
       };
 
-      html2pdf()
-        .set({
-          margin: [8, 8, 8, 8],
-          filename: "cleaning-record.pdf",
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            logging: true,
-            backgroundColor: "#ffffff"
-          },
-          jsPDF: {
-            unit: "mm",
-            format: "a4",
-            orientation: "portrait"
-          },
-          pagebreak: { mode: ["css", "legacy"] }
-        })
-        .from(pdfSheet)
-        .save()
-        .then(() => {
-          restoreSheetStyle();
-        })
-        .catch((err) => {
-          console.error("PDF export failed:", err);
-          restoreSheetStyle();
-          alert("PDF export failed. Please check console logs.");
-        });
+      setTimeout(() => {
+        html2pdf()
+          .set({
+            margin: [8, 8, 8, 8],
+            filename: "cleaning-record.pdf",
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              logging: true,
+              backgroundColor: "#ffffff"
+            },
+            jsPDF: {
+              unit: "mm",
+              format: "a4",
+              orientation: "portrait"
+            },
+            pagebreak: { mode: ["css", "legacy"] }
+          })
+          .from(pdfSheet)
+          .save()
+          .then(() => {
+            restoreSheetStyle();
+          })
+          .catch((err) => {
+            console.error("PDF export failed:", err);
+            restoreSheetStyle();
+            alert("PDF export failed. Please check console logs.");
+          });
+      }, 100);
     }
 
     imageInput.addEventListener("change", (e) => {
