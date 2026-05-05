@@ -1,97 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>REC Cleaning Record Tool v3</title>
+  <meta charset="UTF-8">
+  <title>REC Cleaning Record Pro - Final Fixed</title>
   <style>
-    :root { --primary: #0f766e; --line: #d9dee7; --bg: #f5f7fa; }
-    /* 全局使用 Times New Roman */
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Times New Roman", Times, serif; }
-    body { background: var(--bg); padding: 20px; color: #1f2937; }
-    .wrap { max-width: 1000px; margin: 0 auto; }
-    .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-    .card-head { font-size: 1.25rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    .field { display: flex; flex-direction: column; gap: 5px; }
-    .field.full { grid-column: 1 / -1; }
-    label { font-size: 13px; font-weight: bold; color: #6b7280; }
-    input { padding: 8px; border: 1px solid var(--line); border-radius: 4px; font-family: "Times New Roman"; }
-    .preview { margin-top: 10px; border: 2px dashed var(--line); min-height: 100px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
-    .preview img { max-width: 100%; max-height: 300px; }
-    .actions { display: flex; gap: 10px; margin-top: 15px; }
-    button { padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; font-family: "Times New Roman"; }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .table-wrap { overflow-x: auto; margin-top: 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid var(--line); padding: 8px; text-align: center; font-size: 14px; }
-    th { background: #f9fafb; }
-    td input { width: 100%; border: none; text-align: center; outline: none; background: transparent; font-family: "Times New Roman"; }
-    .btn-export { background: #58a6b3; color: #fff; padding: 12px 30px; float: right; margin-top: 10px; }
+    /* 全局 Times New Roman */
+    * { box-sizing: border-box; font-family: "Times New Roman", Times, serif; }
+    body { background: #f0f2f5; padding: 20px; color: #333; }
+    .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h2 { color: #0f766e; margin-bottom: 20px; border-bottom: 2px solid #0f766e; padding-bottom: 5px; }
+    .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+    .field { display: flex; flex-direction: column; }
+    label { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+    input[type="text"], input[type="file"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .btn-row { margin: 15px 0; display: flex; gap: 10px; }
+    button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.3s; }
+    .btn-ocr { background: #0f766e; color: white; }
+    .btn-pdf { background: #58a6b3; color: white; float: right; padding: 12px 30px; font-size: 16px; }
+    .btn-ocr:hover, .btn-pdf:hover { opacity: 0.8; }
+    .table-editor { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    .table-editor th, .table-editor td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    .table-editor th { background: #f8f9fa; font-size: 13px; }
+    .table-editor input { width: 100%; border: none; text-align: center; font-size: 14px; background: transparent; }
 
-    /* PDF 渲染專用 (Times New Roman + 縮放以防止切斷) */
-    #pdf-render-container { position: absolute; left: -10000px; top: 0; width: 190mm; }
-    .pdf-sheet { padding: 15mm 10mm; background: #fff; color: #000; }
-    .pdf-header { font-size: 14pt; font-weight: bold; margin-bottom: 20px; }
-    .pdf-title-box { text-align: center; margin-bottom: 25px; }
-    .pdf-title { font-size: 20pt; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px; display: inline-block; min-width: 100mm; }
-    .pdf-meta { margin-bottom: 20px; font-size: 11pt; }
-    .pdf-meta-row { display: flex; margin-bottom: 8px; border-bottom: 1px solid #ccc; }
-    .pdf-label { font-weight: bold; width: 40mm; }
-    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .pdf-table th, .pdf-table td { border: 0.8pt solid #000 !important; padding: 4px 1px; font-size: 8.5pt; text-align: center; }
-    .pdf-table th { background-color: #f0f0f0 !important; }
+    /* PDF 渲染專用樣式 - 嚴格對標附件 */
+    #pdf-container { position: absolute; left: -9999px; width: 190mm; } /* 縮小寬度防止切斷 */
+    .pdf-page { padding: 10mm; background: white; color: black; }
+    .pdf-header { font-size: 16pt; font-weight: bold; margin-bottom: 20px; }
+    .pdf-title-area { text-align: center; margin-bottom: 20px; }
+    .pdf-title { font-size: 22pt; font-weight: bold; border-bottom: 2px solid black; display: inline-block; padding: 0 50px 5px 50px; }
+    .pdf-info-row { display: flex; margin-bottom: 10px; font-size: 12pt; border-bottom: 1px solid #eee; }
+    .pdf-info-label { width: 40mm; font-weight: bold; }
+    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 4px 1px; font-size: 8.5pt; text-align: center; overflow: hidden; }
+    .pdf-table th { background: #f0f0f0 !important; }
   </style>
 </head>
 <body>
 
-<div class="wrap">
-  <section class="card">
-    <div class="card-head">Document Settings</div>
-    <div class="grid">
-      <div class="field"><label>Project Name</label><input type="text" id="projectName"></div>
-      <div class="field"><label>Location</label><input type="text" id="location"></div>
-      <div class="field"><label>Cleaning Period</label><input type="text" id="period"></div>
-      <div class="field full">
-        <label>Upload Screenshot</label>
-        <input type="file" id="imageInput" accept="image/*">
-        <div class="preview" id="previewFrame">Upload image to start</div>
-      </div>
-    </div>
-    <div class="actions">
-      <button class="btn-primary" id="ocrBtn">Extract Table Data</button>
-    </div>
-    <div id="noticeBox" style="margin-top:10px; font-size:13px; color:var(--primary);">Ready</div>
-  </section>
+<div class="container">
+  <h2>REC Cleaning Record Tool</h2>
+  
+  <div class="input-group">
+    <div class="field"><label>Project Name:</label><input type="text" id="pName"></div>
+    <div class="field"><label>Location:</label><input type="text" id="pLoc"></div>
+    <div class="field"><label>Cleaning Period:</label><input type="text" id="pPeriod"></div>
+    <div class="field"><label>Upload Screenshot:</label><input type="file" id="imgInp" accept="image/*"></div>
+  </div>
 
-  <section class="card">
-    <div class="card-head">Data Editor (Please verify values)</div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>IC No.</th><th>QJ (kW)</th><th>TH1 (Ret)</th><th>TH2 (Pipe)</th><th>TH3 (Sup)</th><th>TH4 (Sup2)</th><th>Mode</th><th>Status</th></tr>
-        </thead>
-        <tbody id="ocrTableBody"></tbody>
-      </table>
-    </div>
-    <button class="btn-export" id="exportPdfBtn">Generate PDF</button>
-  </section>
+  <div class="btn-row">
+    <button class="btn-ocr" id="runOcr">Extract Table Data (OCR)</button>
+    <span id="status" style="font-size: 13px; color: #666;">Ready</span>
+  </div>
+
+  <table class="table-editor">
+    <thead>
+      <tr>
+        <th style="width:8%">IC No.</th><th style="width:12%">QJ (kW)</th>
+        <th style="width:12%">TH1 (Ret)</th><th style="width:12%">TH2 (Pipe)</th>
+        <th style="width:12%">TH3 (Sup)</th><th style="width:12%">TH4 (Sup2)</th>
+        <th>Mode</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="editorBody"></tbody>
+  </table>
+
+  <div style="overflow: hidden; margin-top: 20px;">
+    <button class="btn-pdf" id="genPdf">Generate Professional PDF</button>
+  </div>
 </div>
 
-<div id="pdf-render-container">
-  <div class="pdf-sheet" id="pdfSheet">
+<!-- PDF 隱藏渲染區 -->
+<div id="pdf-container">
+  <div class="pdf-page" id="pdfSheet">
     <div class="pdf-header">REC Engineering Contracting Company Limited</div>
-    <div class="pdf-title-box"><div class="pdf-title">Annual Cleaning Record</div></div>
-    <div class="pdf-meta">
-      <div class="pdf-meta-row"><span class="pdf-label">Project Name :</span><span id="pdfProject"></span></div>
-      <div class="pdf-meta-row"><span class="pdf-label">Location :</span><span id="pdfLocation"></span></div>
-      <div class="pdf-meta-row"><span class="pdf-label">Cleaning Period :</span><span id="pdfPeriod"></span></div>
-    </div>
+    <div class="pdf-title-area"><div class="pdf-title">Annual Cleaning Record</div></div>
+    
+    <div class="pdf-info-row"><div class="pdf-info-label">Project Name :</div><div id="vName"></div></div>
+    <div class="pdf-info-row"><div class="pdf-info-label">Location :</div><div id="vLoc"></div></div>
+    <div class="pdf-info-row"><div class="pdf-info-label">Cleaning Period :</div><div id="vPeriod"></div></div>
+
     <table class="pdf-table">
       <thead>
         <tr>
-          <th style="width:8%">IC No.</th>
-          <th style="width:12%">Cooling Capacity (kW)</th>
+          <th style="width:9%">IC No.</th>
+          <th style="width:11%">Cooling Capacity (kW)</th>
           <th style="width:14%">Cooling Air Supply Temp °C (TH3)</th>
           <th style="width:14%">Cooling Air Supply Temp °C (TH4)</th>
           <th style="width:14%">Cooling Air Return Temp °C (TH1)</th>
@@ -109,87 +102,95 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-  // 數字清理函數：修正 OCR 常見錯誤
-  function cleanNum(str) {
+  const editorBody = document.getElementById('editorBody');
+  const status = document.getElementById('status');
+
+  // 初始化表格
+  function initRows(count = 3) {
+    editorBody.innerHTML = '';
+    for(let i=0; i<count; i++) addRow(['00'+(i+1), '', '', '', '', '', 'Cooling', 'Cool ON']);
+  }
+  function addRow(vals) {
+    const tr = document.createElement('tr');
+    vals.forEach(v => tr.innerHTML += `<td><input type="text" value="${v}"></td>`);
+    editorBody.appendChild(tr);
+  }
+  initRows();
+
+  // 數字清理與修復
+  function fixNum(str) {
     if(!str) return '';
-    // 移除逗號
-    let val = str.replace(/,/g, '');
-    // 如果數字太長且沒有點 (例如 252)，嘗試在倒數第一位前加點 (變成 25.2)
-    if (val.length >= 3 && !val.includes('.') && !isNaN(val)) {
-        val = (parseFloat(val) / 10).toFixed(1);
+    let s = str.replace(/,/g, '').trim(); // 刪逗號
+    if(!s.includes('.') && s.length >= 3 && !isNaN(s)) {
+      return (parseFloat(s) / 10).toFixed(1); // 252 -> 25.2
     }
-    return val;
+    return s;
   }
 
-  function updateTable(data = []) {
-    const tbody = document.getElementById('ocrTableBody');
-    tbody.innerHTML = '';
-    const base = data.length > 0 ? data : [['022','','','','','','Cooling','Cool ON']];
-    base.forEach(row => {
-      const tr = document.createElement('tr');
-      row.forEach(val => { tr.innerHTML += `<td><input type="text" value="${val}"></td>`; });
-      tbody.appendChild(tr);
-    });
-  }
-  updateTable();
-
-  document.getElementById('imageInput').onchange = (e) => {
-    const file = e.target.files[0];
-    if(file) document.getElementById('previewFrame').innerHTML = `<img src="${URL.createObjectURL(file)}" id="targetImg">`;
-  };
-
-  document.getElementById('ocrBtn').onclick = async () => {
-    const img = document.getElementById('targetImg');
-    if(!img) return alert("Please upload image!");
-    document.getElementById('noticeBox').innerText = "Analyzing... (Correcting OCR Errors)";
+  // OCR 邏輯
+  document.getElementById('runOcr').onclick = async () => {
+    const file = document.getElementById('imgInp').files[0];
+    if(!file) return alert("Please select image!");
     
-    const { data: { text } } = await Tesseract.recognize(img.src, 'eng');
-    const lines = text.split('\n').filter(l => l.trim().length > 10);
+    status.innerText = "Processing OCR... please wait.";
+    const { data: { text } } = await Tesseract.recognize(file, 'eng');
+    const lines = text.split('\n').filter(l => l.length > 10);
+    
     const results = [];
-
     lines.forEach(line => {
       const parts = line.split(/\s+/).filter(p => p.length > 0);
-      // 識別 IC 編號開頭的行
       if (parts.length >= 6 && /^\d{3}$/.test(parts[0])) {
         results.push([
-          parts[0],              // IC
-          cleanNum(parts[1]),    // QJ
-          cleanNum(parts[4]),    // TH1
-          cleanNum(parts[5]),    // TH2
-          cleanNum(parts[6]),    // TH3
-          cleanNum(parts[7]),    // TH4
+          parts[0], 
+          fixNum(parts[1]), // QJ
+          fixNum(parts[4]), // TH1
+          fixNum(parts[5]), // TH2
+          fixNum(parts[6]), // TH3
+          fixNum(parts[7]), // TH4
           "Cooling", "Cool ON"
         ]);
       }
     });
-    updateTable(results);
-    document.getElementById('noticeBox').innerText = `Done. Found ${results.length} rows. Please check decimals.`;
+
+    if(results.length > 0) {
+      editorBody.innerHTML = '';
+      results.forEach(r => addRow(r));
+      status.innerText = `Success: ${results.length} rows found.`;
+    } else {
+      status.innerText = "OCR failed to find table rows.";
+    }
   };
 
-  document.getElementById('exportPdfBtn').onclick = async () => {
-    document.getElementById('pdfProject').innerText = document.getElementById('projectName').value;
-    document.getElementById('pdfLocation').innerText = document.getElementById('location').value;
-    document.getElementById('pdfPeriod').innerText = document.getElementById('period').value;
+  // 生成 PDF
+  document.getElementById('genPdf').onclick = async () => {
+    // 同步數據
+    document.getElementById('vName').innerText = document.getElementById('pName').value;
+    document.getElementById('vLoc').innerText = document.getElementById('pLoc').value;
+    document.getElementById('vPeriod').innerText = document.getElementById('pPeriod').value;
 
     const pdfBody = document.getElementById('pdfBody');
     pdfBody.innerHTML = '';
-    document.querySelectorAll('#ocrTableBody tr').forEach(row => {
+    
+    document.querySelectorAll('#editorBody tr').forEach(row => {
       const ins = row.querySelectorAll('input');
       const tr = document.createElement('tr');
-      // 附件要求順序: IC, QJ, TH3, TH4, TH1, TH2, Mode, Status
-      [ins[0].value, ins[1].value, ins[4].value, ins[5].value, ins[2].value, ins[3].value, ins[6].value, ins[7].value].forEach(v => {
-        tr.innerHTML += `<td>${v || '-'}</td>`;
-      });
+      // 順序：IC, QJ, TH3, TH4, TH1, TH2, Mode, Status
+      const vals = [ins[0].value, ins[1].value, ins[4].value, ins[5].value, ins[2].value, ins[3].value, ins[6].value, ins[7].value];
+      vals.forEach(v => tr.innerHTML += `<td>${v || '-'}</td>`);
       pdfBody.appendChild(tr);
     });
 
+    const element = document.getElementById('pdfSheet');
     const opt = {
-      margin: 5,
-      filename: 'REC_Cleaning_Record.pdf',
+      margin: 0,
+      filename: 'Cleaning_Record.pdf',
       html2canvas: { scale: 3, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
-    html2pdf().set(opt).from(document.getElementById('pdfSheet')).save();
+    
+    status.innerText = "Generating PDF...";
+    await html2pdf().set(opt).from(element).save();
+    status.innerText = "PDF Downloaded.";
   };
 </script>
 </body>
