@@ -38,7 +38,6 @@
     .export-bar{display:flex;justify-content:flex-end;margin-top:10px}
     .export-btn{padding:14px 22px;min-width:160px;font-size:16px;background:#58a6b3;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.22)}
 
-    /* PDF layout (Attachment style) */
     .pdf-sheet{
       display:none;
       background:#fff;
@@ -291,13 +290,6 @@
       return s;
     }
 
-    function formatOneDecimal(raw) {
-      const v = repairDecimalValue(raw);
-      const n = Number(v);
-      if (!Number.isFinite(n)) return v;
-      return n.toFixed(1).replace(/\.0$/, '');
-    }
-
     function extractMode(line) {
       const m = line.match(/\b(Cooling|Heating|Auto|Fan)\b/i);
       return m ? m[1] : "";
@@ -324,7 +316,6 @@
       const nums = clean.match(/-?\d+(?:\.\d+)?/g) || [];
       if (nums.length < 8) return null;
 
-      // OCR table pattern: IC, QJ, G_No, B_No, TH1, TH2, TH3, TH4, ...
       const ic = nums[0];
       const qj = nums[1] || "";
       const th1 = repairDecimalValue(nums[4] || "");
@@ -373,38 +364,48 @@
       return { ok: true, rows: extracted };
     }
 
-    // IMPORTANT: manual transfer from UI inputs -> PDF cells
     function syncPdfFromUi() {
-      const title = (docTitle.value || "").trim() || "Annual Cleaning Record";
+      const title = (document.getElementById("docTitle").value || "").trim() || "Annual Cleaning Record";
+      const project = (document.getElementById("projectName").value || "").trim();
+      const location = (document.getElementById("location").value || "").trim();
+      const period = (document.getElementById("period").value || "").trim();
+
       document.getElementById("pdfDisplayTitle").innerText = title;
-      document.getElementById("pdfProject").innerText = (projectName.value || "").trim();
-      document.getElementById("pdfLocation").innerText = (locationInput.value || "").trim();
-      document.getElementById("pdfPeriod").innerText = (periodInput.value || "").trim();
+      document.getElementById("pdfProject").innerText = project;
+      document.getElementById("pdfLocation").innerText = location;
+      document.getElementById("pdfPeriod").innerText = period;
 
       const pdfBody = document.getElementById("pdfBody");
+      const uiRows = Array.from(document.querySelectorAll("#ocrTableBody tr"));
       pdfBody.innerHTML = "";
 
-      rows().forEach((tr) => {
+      const fmtTemp = (v) => {
+        const s = String(v ?? "").trim();
+        if (!s) return "";
+        const n = Number(s.replace(",", "."));
+        if (!Number.isFinite(n)) return s;
+        return n.toFixed(1).replace(/\.0$/, "");
+      };
+
+      uiRows.forEach((tr) => {
         const inputs = tr.querySelectorAll("input");
-        const get = (i) => (inputs[i] && inputs[i].value != null) ? String(inputs[i].value).trim() : "";
+        const val = (i) => (inputs[i] ? String(inputs[i].value || "").trim() : "");
 
-        // UI: IC, QJ, TH1, TH2, TH3, TH4, Mode, IC S
-        const ic = get(0);
-        const kw = get(1);
-        const th1 = formatOneDecimal(get(2));
-        const th2 = formatOneDecimal(get(3));
-        const th3 = formatOneDecimal(get(4));
-        const th4 = formatOneDecimal(get(5));
-        const mode = get(6);
-        const status = get(7);
+        const ic = val(0);
+        const qj = val(1);
+        const th1 = fmtTemp(val(2));
+        const th2 = fmtTemp(val(3));
+        const th3 = fmtTemp(val(4));
+        const th4 = fmtTemp(val(5));
+        const mode = val(6);
+        const status = val(7);
 
-        // PDF required order: IC, Cooling Capacity, TH3, TH4, TH1, TH2, AC Mode, IC Status
-        const mapped = [ic, kw, th3, th4, th1, th2, mode, status];
+        const mapped = [ic, qj, th3, th4, th1, th2, mode, status];
 
         const out = document.createElement("tr");
-        mapped.forEach((txt) => {
+        mapped.forEach((text) => {
           const td = document.createElement("td");
-          td.innerText = txt;
+          td.innerText = text;
           out.appendChild(td);
         });
         pdfBody.appendChild(out);
@@ -478,62 +479,60 @@
     }
 
     function exportPdf() {
-      // Always refresh PDF content from current UI values first.
       syncPdfFromUi();
 
       const pdfSheet = document.getElementById("pdfSheet");
-      const prevStyle = {
+      const pdfBody = document.getElementById("pdfBody");
+
+      if (!pdfBody || !pdfBody.rows || pdfBody.rows.length === 0) {
+        alert("No table data to export. Please run OCR or fill the table first.");
+        return;
+      }
+
+      if (typeof html2pdf === "undefined") {
+        alert("html2pdf library is not loaded.");
+        return;
+      }
+
+      const prev = {
         display: pdfSheet.style.display,
         position: pdfSheet.style.position,
         left: pdfSheet.style.left,
         top: pdfSheet.style.top,
         width: pdfSheet.style.width,
         background: pdfSheet.style.background,
+        zIndex: pdfSheet.style.zIndex,
         visibility: pdfSheet.style.visibility
       };
 
-      // Make source renderable for capture
       pdfSheet.style.display = "block";
-      pdfSheet.style.position = "absolute";
-      pdfSheet.style.left = "-10000px";
+      pdfSheet.style.position = "fixed";
+      pdfSheet.style.left = "-5000px";
       pdfSheet.style.top = "0";
       pdfSheet.style.width = "210mm";
       pdfSheet.style.background = "#ffffff";
-      pdfSheet.style.visibility = "hidden";
+      pdfSheet.style.zIndex = "-1";
+      pdfSheet.style.visibility = "visible";
 
-      // Clone final populated template
-      const clone = pdfSheet.cloneNode(true);
-      clone.removeAttribute("id");
-      clone.removeAttribute("aria-hidden");
-      clone.style.display = "block";
-      clone.style.position = "absolute";
-      clone.style.left = "-10000px";
-      clone.style.top = "0";
-      clone.style.width = "210mm";
-      clone.style.background = "#ffffff";
-      clone.style.visibility = "visible";
-      clone.style.minHeight = "297mm";
-      clone.style.boxSizing = "border-box";
+      const restoreSheetStyle = () => {
+        pdfSheet.style.display = "none";
+        pdfSheet.style.position = "static";
+        pdfSheet.style.left = "";
+        pdfSheet.style.top = "";
+        pdfSheet.style.width = "";
+        pdfSheet.style.background = "";
+        pdfSheet.style.zIndex = "";
+        pdfSheet.style.visibility = "";
 
-      document.body.appendChild(clone);
-
-      const cleanup = () => {
-        clone.remove();
-        pdfSheet.style.display = prevStyle.display;
-        pdfSheet.style.position = prevStyle.position;
-        pdfSheet.style.left = prevStyle.left;
-        pdfSheet.style.top = prevStyle.top;
-        pdfSheet.style.width = prevStyle.width;
-        pdfSheet.style.background = prevStyle.background;
-        pdfSheet.style.visibility = prevStyle.visibility;
+        if (prev.display) pdfSheet.style.display = prev.display;
+        if (prev.position) pdfSheet.style.position = prev.position;
+        if (prev.left) pdfSheet.style.left = prev.left;
+        if (prev.top) pdfSheet.style.top = prev.top;
+        if (prev.width) pdfSheet.style.width = prev.width;
+        if (prev.background) pdfSheet.style.background = prev.background;
+        if (prev.zIndex) pdfSheet.style.zIndex = prev.zIndex;
+        if (prev.visibility) pdfSheet.style.visibility = prev.visibility;
       };
-
-      if (typeof html2pdf === "undefined") {
-        cleanup();
-        noticeBox.textContent = "Status: html2pdf unavailable. Using print fallback.";
-        window.print();
-        return;
-      }
 
       html2pdf()
         .set({
@@ -543,25 +542,25 @@
           html2canvas: {
             scale: 2,
             useCORS: true,
-            backgroundColor: "#ffffff",
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: 1200
+            logging: true,
+            backgroundColor: "#ffffff"
           },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["avoid-all", "css", "legacy"] }
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait"
+          },
+          pagebreak: { mode: ["css", "legacy"] }
         })
-        .from(clone)
+        .from(pdfSheet)
         .save()
         .then(() => {
-          cleanup();
-          noticeBox.textContent = "Status: PDF exported.";
+          restoreSheetStyle();
         })
         .catch((err) => {
-          console.error(err);
-          cleanup();
-          noticeBox.textContent = "Status: html2pdf failed. Using print fallback.";
-          window.print();
+          console.error("PDF export failed:", err);
+          restoreSheetStyle();
+          alert("PDF export failed. Please check console logs.");
         });
     }
 
