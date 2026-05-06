@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>REC Cleaning Record - Absolute Final</title>
+  <title>REC - Service Report (Mitsubishi Electric VRV System)</title>
   <style>
-    /* 全局 Times New Roman */
+    /* 全域 Times New Roman */
     * { box-sizing: border-box; font-family: "Times New Roman", Times, serif; }
     body { background: #f4f7f9; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-    .main-box { width: 100%; max-width: 1100px; background: #fff; padding: 25px; border-radius: 8px; }
+    .main-box { width: 100%; max-width: 1100px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     
     .input-area { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
     .field { display: flex; flex-direction: column; font-size: 14px; font-weight: bold; }
-    input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 5px; font-family: "Times New Roman"; }
+    input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 5px; font-family: "Times New Roman"; }
 
     .controls { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
     button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
@@ -23,28 +23,41 @@
     th { background: #f8f9fa; font-size: 12px; }
     td input { width: 100%; border: none; text-align: center; font-size: 15px; background: #fffbe6; }
 
-    /* PDF 渲染層：徹底清除 (THx) */
-    #pdf-wrapper { position: absolute; left: -9999px; width: 195mm; } 
-    .pdf-sheet { padding: 10mm; background: white; color: black; }
-    .pdf-header { font-size: 18pt; font-weight: bold; margin-bottom: 10px; }
-    .pdf-title-box { text-align: center; margin: 20px 0; }
-    .pdf-title { font-size: 24pt; font-weight: bold; text-decoration: underline; display: inline-block; }
-    .pdf-meta { font-size: 13pt; line-height: 1.6; margin-bottom: 15px; }
+    /* PDF 渲染層 (A4 尺寸) */
+    #pdf-wrapper { position: absolute; left: -9999px; width: 210mm; height: 297mm; overflow: hidden; } 
+    .pdf-sheet { width: 210mm; height: 297mm; background: white; color: black; position: relative; }
     
+    /* 根據紙張頂邊緣精確定位 (cm) */
+    .line-1 { position: absolute; top: 1.95cm; left: 10mm; width: 190mm; font-size: 16pt; font-weight: bold; }
+    .line-2 { position: absolute; top: 3.5cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
+    .line-3 { position: absolute; top: 5.2cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
+    .line-4 { position: absolute; top: 6cm; left: 10mm; width: 190mm; font-size: 22pt; font-weight: bold; text-align: center; text-decoration: underline; }
+    .line-5 { position: absolute; top: 6.8cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
+    .line-table { position: absolute; top: 7.8cm; left: 10mm; width: 190mm; }
+
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 6px 2px; font-size: 9.5pt; text-align: center; }
+    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 4px 1px; font-size: 7.5pt; text-align: center; }
     .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.1; }
   </style>
 </head>
 <body>
 
 <div class="main-box">
-  <h2 style="color:#0f766e">REC Annual Cleaning Record (Final Fix)</h2>
+  <!-- 已更新網頁標題 -->
+  <h2 style="color:#0f766e">REC - Service Report (Mitsubishi Electric VRV System)</h2>
   
   <div class="input-area">
     <div class="field">Project Name<input type="text" id="pName"></div>
     <div class="field">Location<input type="text" id="pLoc"></div>
     <div class="field">Cleaning Period<input type="text" id="pTime"></div>
+    <div class="field">Report Title
+        <select id="pTitleType" onchange="toggleOtherTitle()">
+            <option value="Startup Service Report - VRF System">1. Startup Service Report - VRF System</option>
+            <option value="Annual Service Report - VRF System">2. Annual Service Report - VRF System</option>
+            <option value="Other">3. Other</option>
+        </select>
+        <input type="text" id="pTitleOther" placeholder="輸入自定義標題..." style="display:none; margin-top:5px;">
+    </div>
   </div>
 
   <div class="field" style="margin-bottom:15px;">
@@ -53,7 +66,7 @@
 
   <div class="controls">
     <button class="btn-ocr" id="runOcr">1. Extract Data</button>
-    <span id="msg" style="font-size:13px; color:#666;">Ready. Labels (TH1-TH4) have been removed.</span>
+    <span id="msg" style="font-size:13px; color:#666;">Ready.</span>
     <button class="btn-pdf" id="genPdf">2. Download PDF</button>
   </div>
 
@@ -67,33 +80,32 @@
   </table>
 </div>
 
-<!-- PDF 渲染區域 -->
+<!-- PDF 模板 -->
 <div id="pdf-wrapper">
   <div class="pdf-sheet" id="pdfTemplate">
-    <div class="pdf-header">REC Engineering Contracting Company Limited</div>
-    <div class="pdf-title-box"><span class="pdf-title">Annual Cleaning Record</span></div>
-    
-    <div class="pdf-meta">
-      <div><strong>Project Name : </strong> <span id="outName"></span></div>
-      <div><strong>Location : </strong> <span id="outLoc"></span></div>
-      <div><strong>Cleaning Period : </strong> <span id="outTime"></span></div>
-    </div>
+    <div class="line-1">REC Engineering Contracting Company Limited</div>
+    <div class="line-2">Project Name : <span id="outName"></span></div>
+    <div class="line-3">Location : <span id="outLoc"></span></div>
+    <div class="line-4"><span id="outTitle"></span></div>
+    <div class="line-5">Cleaning Period : <span id="outTime"></span></div>
 
-    <table class="pdf-table">
-      <thead>
-        <tr>
-          <th style="width:10%">IC No.</th>
-          <th style="width:12%">Cooling Capacity (kW)</th>
-          <th style="width:14%">Cooling Air Supply Temp °C</th>
-          <th style="width:14%">Cooling Air Supply Temp °C</th>
-          <th style="width:14%">Cooling Air Return Temp °C</th>
-          <th style="width:14%">Pipe Outlet Temp °C</th>
-          <th style="width:11%">AC Mode</th>
-          <th style="width:11%">IC Status</th>
-        </tr>
-      </thead>
-      <tbody id="outBody"></tbody>
-    </table>
+    <div class="line-table">
+        <table class="pdf-table">
+          <thead>
+            <tr>
+              <th style="width:10%">IC No.</th>
+              <th style="width:12%">Cooling Capacity (kW)</th>
+              <th style="width:14%">Cooling Air Supply Temp °C</th>
+              <th style="width:14%">Cooling Air Supply Temp °C</th>
+              <th style="width:14%">Cooling Air Return Temp °C</th>
+              <th style="width:14%">Pipe Outlet Temp °C</th>
+              <th style="width:11%">AC Mode</th>
+              <th style="width:11%">IC Status</th>
+            </tr>
+          </thead>
+          <tbody id="outBody"></tbody>
+        </table>
+    </div>
   </div>
 </div>
 
@@ -101,6 +113,12 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
+  function toggleOtherTitle() {
+    const type = document.getElementById('pTitleType').value;
+    document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
+  }
+
+  // 自動修正小數點邏輯：大於 50 且無小數點則除以 10
   function smartFix(val) {
     if(!val) return '';
     let n = val.replace(/[^0-9.]/g, ''); 
@@ -124,12 +142,13 @@
     document.getElementById('msg').innerText = "Processing...";
     
     const { data: { text } } = await Tesseract.recognize(file, 'eng');
-    const lines = text.split('\n').filter(l => l.trim().length > 15);
+    const lines = text.split('\n').filter(l => l.trim().length > 10);
     
     tableBody.innerHTML = '';
     lines.forEach(line => {
       const p = line.split(/\s+/).filter(x => x.length > 0);
       if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
+        // 映射數據並自動移除技術標籤顯示
         addRow([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[5]), smartFix(p[6]), smartFix(p[7]), "Cooling", "Cool ON"]);
       }
     });
@@ -137,25 +156,29 @@
   };
 
   document.getElementById('genPdf').onclick = async () => {
+    const type = document.getElementById('pTitleType').value;
+    const finalTitle = (type === 'Other') ? document.getElementById('pTitleOther').value : type;
+    
     document.getElementById('outName').innerText = document.getElementById('pName').value;
     document.getElementById('outLoc').innerText = document.getElementById('pLoc').value;
     document.getElementById('outTime').innerText = document.getElementById('pTime').value;
+    document.getElementById('outTitle').innerText = finalTitle;
 
     const outBody = document.getElementById('outBody');
     outBody.innerHTML = '';
     document.querySelectorAll('#tableBody tr').forEach(tr => {
       const inp = tr.querySelectorAll('input');
       const row = document.createElement('tr');
-      // 順序：IC, QJ, TH3, TH4, TH1, TH2, Mode, Status
+      // 依照指定順序重排表格內容
       const vals = [inp[0].value, inp[1].value, inp[4].value, inp[5].value, inp[2].value, inp[3].value, inp[6].value, inp[7].value];
       vals.forEach(v => row.innerHTML += `<td>${v}</td>`);
       outBody.appendChild(row);
     });
 
     const opt = {
-      margin: 2,
-      filename: 'REC_Report_Final.pdf',
-      html2canvas: { scale: 3 },
+      margin: 0,
+      filename: 'REC_Service_Report.pdf',
+      html2canvas: { scale: 3, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     html2pdf().set(opt).from(document.getElementById('pdfTemplate')).save();
