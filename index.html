@@ -23,18 +23,21 @@
     th { background: #f8f9fa; font-size: 12px; }
     td input { width: 100%; border: none; text-align: center; font-size: 15px; background: #fffbe6; }
 
-    /* PDF 渲染層修正：解決排版與空白頁問題 */
+    /* PDF 渲染層：絕對定位與防空白頁設定 */
     #pdf-wrapper { position: absolute; left: -9999px; width: 210mm; height: 297mm; overflow: hidden; } 
     .pdf-sheet { width: 210mm; height: 297mm; background: white; color: black; position: relative; padding: 0; margin: 0; }
     
-    /* 精確 cm 定位修正 */
+    /* 根據量度重新排序與定位 (由頂邊緣起算 cm) */
     .line-1 { position: absolute; top: 1.95cm; left: 10mm; width: 190mm; font-size: 16pt; font-weight: bold; }
-    .line-2 { position: absolute; top: 3.5cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
+    /* 第二句改為標題，字型大小減1號 (21pt) */
+    .line-2 { position: absolute; top: 3.5cm; left: 10mm; width: 190mm; font-size: 21pt; font-weight: bold; text-align: center; text-decoration: underline; }
+    /* 第三句 Project Name */
     .line-3 { position: absolute; top: 5.2cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
-    /* 標題置中對齊修正 */
-    .line-4 { position: absolute; top: 6cm; left: 10mm; width: 190mm; font-size: 22pt; font-weight: bold; text-align: center; }
-    .pdf-title-text { text-decoration: underline; display: inline-block; width: 100%; text-align: center; }
+    /* 第四句 Location */
+    .line-4 { position: absolute; top: 6cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
+    /* 第五句 Inspection Period */
     .line-5 { position: absolute; top: 6.8cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
+    /* Table 表格 */
     .line-table { position: absolute; top: 7.8cm; left: 10mm; width: 190mm; }
 
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -50,7 +53,8 @@
   <div class="input-area">
     <div class="field">Project Name<input type="text" id="pName"></div>
     <div class="field">Location<input type="text" id="pLoc"></div>
-    <div class="field">Cleaning Period<input type="text" id="pTime"></div>
+    <!-- 更改為 Inspection Period -->
+    <div class="field">Inspection Period<input type="text" id="pTime"></div>
     <div class="field">Report Title
         <select id="pTitleType" onchange="toggleOtherTitle()">
             <option value="Startup Service Report - VRF System">1. Startup Service Report - VRF System</option>
@@ -71,11 +75,16 @@
     <button class="btn-pdf" id="genPdf">2. Download PDF</button>
   </div>
 
+  <!-- 網頁 Table 改為 6 列 -->
   <table>
     <thead>
       <tr>
-        <!-- 修正為 ID No. -->
-        <th>ID No.</th><th>Capacity(kW)</th><th>TH1 (Ret)</th><th>TH2 (Pipe)</th><th>TH3 (Sup)</th><th>TH4 (Sup2)</th><th>Mode</th><th>Status</th>
+        <th>ID No.</th>
+        <th>Cooling Capacity (kW)</th>
+        <th>Cooling Air Supply Temperature℃</th>
+        <th>Cooling Air Return Temperature℃</th>
+        <th>AC Mode</th>
+        <th>Status</th>
       </tr>
     </thead>
     <tbody id="tableBody"></tbody>
@@ -86,23 +95,22 @@
 <div id="pdf-wrapper">
   <div class="pdf-sheet" id="pdfTemplate">
     <div class="line-1">REC Engineering Contracting Company Limited</div>
-    <div class="line-2">Project Name : <span id="outName"></span></div>
-    <div class="line-3">Location : <span id="outLoc"></span></div>
-    <div class="line-4"><span class="pdf-title-text" id="outTitle"></span></div>
-    <div class="line-5">Cleaning Period : <span id="outTime"></span></div>
+    <div class="line-2"><span id="outTitle"></span></div>
+    <div class="line-3">Project Name : <span id="outName"></span></div>
+    <div class="line-4">Location : <span id="outLoc"></span></div>
+    <div class="line-5">Inspection Period : <span id="outTime"></span></div>
 
     <div class="line-table">
+        <!-- PDF Table 亦改為 6 列 -->
         <table class="pdf-table">
           <thead>
             <tr>
-              <th style="width:10%">ID No.</th> <!-- PDF 內同步更新 -->
-              <th style="width:12%">Cooling Capacity (kW)</th>
-              <th style="width:14%">Cooling Air Supply Temp °C</th>
-              <th style="width:14%">Cooling Air Supply Temp °C</th>
-              <th style="width:14%">Cooling Air Return Temp °C</th>
-              <th style="width:14%">Pipe Outlet Temp °C</th>
-              <th style="width:11%">AC Mode</th>
-              <th style="width:11%">IC Status</th>
+              <th style="width:10%">ID No.</th>
+              <th style="width:15%">Cooling Capacity (kW)</th>
+              <th style="width:25%">Cooling Air Supply Temperature ℃</th>
+              <th style="width:25%">Cooling Air Return Temperature ℃</th>
+              <th style="width:12.5%">AC Mode</th>
+              <th style="width:12.5%">Status</th>
             </tr>
           </thead>
           <tbody id="outBody"></tbody>
@@ -130,8 +138,8 @@
   }
 
   const tableBody = document.getElementById('tableBody');
-  // 修正預設值邏輯：未上傳圖片前 Mode 與 Status 為空
-  function addRow(d = ['', '', '', '', '', '', '', '']) {
+  // 配合 6 列設定預設值
+  function addRow(d = ['', '', '', '', '', '']) {
     const tr = document.createElement('tr');
     d.forEach(v => tr.innerHTML += `<td><input type="text" value="${v}"></td>`);
     tableBody.appendChild(tr);
@@ -150,8 +158,15 @@
     lines.forEach(line => {
       const p = line.split(/\s+/).filter(x => x.length > 0);
       if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-        // 識別後才填入 Cooling 與 Cool ON
-        addRow([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[5]), smartFix(p[6]), smartFix(p[7]), "Cooling", "Cool ON"]);
+        // p[4] 是 TH3 (Supply), p[6] 是 TH1 (Return)
+        addRow([
+          p[0], 
+          p[1].replace(',',''), 
+          smartFix(p[4]), 
+          smartFix(p[6]), 
+          "Cooling", 
+          "Cool ON"
+        ]);
       }
     });
     document.getElementById('msg').innerText = "Extraction complete.";
@@ -170,9 +185,10 @@
     outBody.innerHTML = '';
     document.querySelectorAll('#tableBody tr').forEach(tr => {
       const inp = tr.querySelectorAll('input');
-      if(inp[0].value.trim() !== "") { // 僅導出有資料的行
+      if(inp[0].value.trim() !== "") { 
           const row = document.createElement('tr');
-          const vals = [inp[0].value, inp[1].value, inp[4].value, inp[5].value, inp[2].value, inp[3].value, inp[6].value, inp[7].value];
+          // 順序寫入 6 個數值
+          const vals = [inp[0].value, inp[1].value, inp[2].value, inp[3].value, inp[4].value, inp[5].value];
           vals.forEach(v => row.innerHTML += `<td>${v}</td>`);
           outBody.appendChild(row);
       }
@@ -183,7 +199,7 @@
       filename: 'REC_Service_Report.pdf',
       html2canvas: { scale: 3, useCORS: true, logging: false },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: 'avoid-all' } // 強制避免自動分頁產生空白頁
+      pagebreak: { mode: 'avoid-all' }
     };
     html2pdf().set(opt).from(document.getElementById('pdfTemplate')).save();
   };
