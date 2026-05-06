@@ -27,22 +27,25 @@
     #pdf-wrapper { position: absolute; left: -9999px; width: 210mm; height: 297mm; overflow: hidden; } 
     .pdf-sheet { width: 210mm; height: 297mm; background: white; color: black; position: relative; padding: 0; margin: 0; }
     
-    /* 根據量度重新排序與定位 (由頂邊緣起算 cm) */
-    .line-1 { position: absolute; top: 1.95cm; left: 10mm; width: 190mm; font-size: 16pt; font-weight: bold; }
-    /* 第二句改為標題，字型大小減1號 (21pt) */
-    .line-2 { position: absolute; top: 3.5cm; left: 10mm; width: 190mm; font-size: 21pt; font-weight: bold; text-align: center; text-decoration: underline; }
-    /* 第三句 Project Name */
-    .line-3 { position: absolute; top: 5.2cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
-    /* 第四句 Location */
-    .line-4 { position: absolute; top: 6cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
-    /* 第五句 Inspection Period */
-    .line-5 { position: absolute; top: 6.8cm; left: 10mm; width: 190mm; font-size: 11pt; font-weight: bold; }
-    /* Table 表格 */
+    /* 字型大小全部減2號 */
+    .line-1 { position: absolute; top: 1.95cm; left: 10mm; width: 190mm; font-size: 14pt; font-weight: bold; } /* 16pt -> 14pt */
+    .line-2 { position: absolute; top: 3.5cm; left: 10mm; width: 190mm; font-size: 19pt; font-weight: bold; text-align: center; text-decoration: underline; } /* 21pt -> 19pt */
+    .line-3 { position: absolute; top: 5.2cm; left: 10mm; width: 190mm; font-size: 9pt; font-weight: bold; } /* 11pt -> 9pt */
+    .line-4 { position: absolute; top: 6cm; left: 10mm; width: 190mm; font-size: 9pt; font-weight: bold; } /* 11pt -> 9pt */
+    .line-5 { position: absolute; top: 6.8cm; left: 10mm; width: 190mm; font-size: 9pt; font-weight: bold; } /* 11pt -> 9pt */
     .line-table { position: absolute; top: 7.8cm; left: 10mm; width: 190mm; }
 
+    /* Table 表格排版 */
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .pdf-table th, .pdf-table td { border: 1px solid black !important; padding: 4px 1px; font-size: 7.5pt; text-align: center; }
-    .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.1; }
+    .pdf-table th, .pdf-table td { 
+        border: 1px solid black !important; 
+        padding: 0.15cm 1px; /* 上下各加0.15cm，總高度增加0.3cm */
+        font-size: 7.5pt; 
+        text-align: center;      /* 水平置中 */
+        vertical-align: middle;  /* 垂直置中 */
+        word-wrap: break-word;   /* 允許長字串自動換行 */
+    }
+    .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.2; }
   </style>
 </head>
 <body>
@@ -53,7 +56,6 @@
   <div class="input-area">
     <div class="field">Project Name<input type="text" id="pName"></div>
     <div class="field">Location<input type="text" id="pLoc"></div>
-    <!-- 更改為 Inspection Period -->
     <div class="field">Inspection Period<input type="text" id="pTime"></div>
     <div class="field">Report Title
         <select id="pTitleType" onchange="toggleOtherTitle()">
@@ -75,7 +77,6 @@
     <button class="btn-pdf" id="genPdf">2. Download PDF</button>
   </div>
 
-  <!-- 網頁 Table 改為 6 列 -->
   <table>
     <thead>
       <tr>
@@ -101,16 +102,16 @@
     <div class="line-5">Inspection Period : <span id="outTime"></span></div>
 
     <div class="line-table">
-        <!-- PDF Table 亦改為 6 列 -->
         <table class="pdf-table">
           <thead>
             <tr>
+              <!-- ID佔10%，其餘5列平均分配各18% (18*5 = 90) -->
               <th style="width:10%">ID No.</th>
-              <th style="width:15%">Cooling Capacity (kW)</th>
-              <th style="width:25%">Cooling Air Supply Temperature ℃</th>
-              <th style="width:25%">Cooling Air Return Temperature ℃</th>
-              <th style="width:12.5%">AC Mode</th>
-              <th style="width:12.5%">Status</th>
+              <th style="width:18%">Cooling Capacity (kW)</th>
+              <th style="width:18%">Cooling Air Supply Temperature ℃</th>
+              <th style="width:18%">Cooling Air Return Temperature ℃</th>
+              <th style="width:18%">AC Mode</th>
+              <th style="width:18%">Status</th>
             </tr>
           </thead>
           <tbody id="outBody"></tbody>
@@ -138,7 +139,6 @@
   }
 
   const tableBody = document.getElementById('tableBody');
-  // 配合 6 列設定預設值
   function addRow(d = ['', '', '', '', '', '']) {
     const tr = document.createElement('tr');
     d.forEach(v => tr.innerHTML += `<td><input type="text" value="${v}"></td>`);
@@ -158,7 +158,6 @@
     lines.forEach(line => {
       const p = line.split(/\s+/).filter(x => x.length > 0);
       if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-        // p[4] 是 TH3 (Supply), p[6] 是 TH1 (Return)
         addRow([
           p[0], 
           p[1].replace(',',''), 
@@ -187,7 +186,6 @@
       const inp = tr.querySelectorAll('input');
       if(inp[0].value.trim() !== "") { 
           const row = document.createElement('tr');
-          // 順序寫入 6 個數值
           const vals = [inp[0].value, inp[1].value, inp[2].value, inp[3].value, inp[4].value, inp[5].value];
           vals.forEach(v => row.innerHTML += `<td>${v}</td>`);
           outBody.appendChild(row);
