@@ -24,8 +24,15 @@
     th { background: #f8f9fa; font-size: 12px; }
     td input { width: 100%; border: none; text-align: center; font-size: 14px; background: #fffbe6; }
 
-    /* PDF 渲染層 (隱藏) */
-    #pdf-wrapper { position: absolute; left: -9999px; } 
+    /* PDF 渲染層 (使用更安全的透明隱藏法，避免引擎崩潰) */
+    #pdf-wrapper { 
+        position: absolute; 
+        top: 0; 
+        left: 0; 
+        opacity: 0; 
+        pointer-events: none; 
+        z-index: -9999; 
+    } 
     #pdfContentArea { width: 190mm; background: white; color: black; }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
@@ -117,7 +124,10 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-  function toggleOtherTitle() {
+// 確保整個網頁載入完成後才執行程式碼，防止版面遺失
+window.onload = function() {
+
+  window.toggleOtherTitle = function() {
     const type = document.getElementById('pTitleType').value;
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
   }
@@ -125,7 +135,7 @@
   // ==========================================
   // 1. 動態處理室外機 (Outdoor)
   // ==========================================
-  function updateOutdoorModels() {
+  window.updateOutdoorModels = function() {
     const qty = parseInt(document.getElementById('outQty').value);
     const container = document.getElementById('modelInputsContainer');
     const tableContainer = document.getElementById('outdoorTablesContainer');
@@ -160,9 +170,10 @@
         </table>`;
     }
   }
+  // 初始化室外機版面
   updateOutdoorModels();
 
-  // 室外機 OCR 邏輯 (使用 Regex 找尋關鍵字)
+  // 室外機 OCR 邏輯
   document.getElementById('runOutdoorOcr').onclick = async () => {
     const file = document.getElementById('imgOutdoor').files[0];
     if(!file) return alert("請上傳 Outdoor 圖片！");
@@ -170,7 +181,6 @@
     
     const { data: { text } } = await Tesseract.recognize(file, 'eng');
     
-    // 使用 Regex 抓取數字
     const getMatches = (regex) => [...text.matchAll(regex)].map(m => m[1]);
     
     const hsMatches = getMatches(/63HS\s*=?\s*([\d.]+)/gi);
@@ -180,9 +190,8 @@
 
     const qty = parseInt(document.getElementById('outQty').value);
     
-    // 依序填入對應機組的輸入框
     for(let i=1; i<=qty; i++) {
-        const index = i - 1; // 陣列索引從 0 開始
+        const index = i - 1;
         if(document.getElementById(`out_hs_${i}`)) document.getElementById(`out_hs_${i}`).value = hsMatches[index] || '';
         if(document.getElementById(`out_ls_${i}`)) document.getElementById(`out_ls_${i}`).value = lsMatches[index] || '';
         if(document.getElementById(`out_th4_${i}`)) document.getElementById(`out_th4_${i}`).value = th4Matches[index] || '';
@@ -207,6 +216,17 @@
   function renderIndoorTable() {
     const tbody = document.getElementById('indoorTableBody');
     tbody.innerHTML = '';
+    
+    // 如果目前還沒有資料，預設顯示 3 行空白列，防止版面看起來遺失
+    if (cumulativeIndoorData.length === 0) {
+        for(let i=0; i<3; i++) {
+            const tr = document.createElement('tr');
+            ['', '', '', '', '', ''].forEach(v => tr.innerHTML += `<td><input type="text" value="${v}"></td>`);
+            tbody.appendChild(tr);
+        }
+        return;
+    }
+
     cumulativeIndoorData.sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
     cumulativeIndoorData.forEach(row => {
         const tr = document.createElement('tr');
@@ -214,6 +234,8 @@
         tbody.appendChild(tr);
     });
   }
+  // 初始化室內機版面
+  renderIndoorTable();
 
   document.getElementById('runIndoorOcr').onclick = async () => {
     const file = document.getElementById('imgIndoor').files[0];
@@ -235,7 +257,7 @@
 
 
   // ==========================================
-  // 3. 生成 PDF
+  // 3. 生成 PDF (已修正崩潰問題)
   // ==========================================
   document.getElementById('genPdf').onclick = async () => {
     const pdfArea = document.getElementById('pdfContentArea');
@@ -248,7 +270,6 @@
         const modelNo = document.getElementById(`outModel_${i}`).value || 'N/A';
         pdfArea.innerHTML += `<div class="pdf-model-text">Model No.: ${modelNo}</div>`;
         
-        // 抓取網頁上辨識完的數值
         const v_hs = document.getElementById(`out_hs_${i}`).value || '-';
         const v_ls = document.getElementById(`out_ls_${i}`).value || '-';
         const v_th4 = document.getElementById(`out_th4_${i}`).value || '-';
@@ -318,25 +339,28 @@
             pdf.setTextColor(0, 0, 0);
             pdf.setFont("times", "bold");
 
+            // Line 1: 公司名稱
             pdf.setFontSize(14);
             pdf.text(companyText, 10, 24);
 
+            // Line 2: 報告標題 (取消會引發錯誤的底線計算，改為純文字置中)
             pdf.setFontSize(19);
             pdf.text(finalTitle, 105, 41, { align: 'center' });
-            var textWidth = pdf.getStringUnitWidth(finalTitle) * 19 / pdf.internal.scaleFactor;
-            pdf.setLineWidth(0.5);
-            pdf.line(105 - textWidth/2, 42.5, 105 + textWidth/2, 42.5);
 
+            // Line 3~5: 項目細節
             pdf.setFontSize(9);
             pdf.text('Project Name : ' + pName, 10, 55);
             pdf.text('Location : ' + pLoc, 10, 63);
             pdf.text('Inspection Period : ' + pTime, 10, 71);
 
+            // 每頁最底放置頁碼
             pdf.setFontSize(7.5);
             pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
         }
     }).save();
   };
+
+}; // window.onload 結束
 </script>
 </body>
 </html>
