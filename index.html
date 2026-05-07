@@ -24,14 +24,11 @@
     th { background: #f8f9fa; font-size: 12px; }
     td input { width: 100%; border: none; text-align: center; font-size: 14px; background: #fffbe6; }
 
-    /* PDF 渲染層 (使用更安全的透明隱藏法，避免引擎崩潰) */
+    /* PDF 渲染層 */
     #pdf-wrapper { 
         position: absolute; 
-        top: 0; 
-        left: 0; 
-        opacity: 0; 
-        pointer-events: none; 
-        z-index: -9999; 
+        left: -9999px; 
+        top: 0;
     } 
     #pdfContentArea { width: 190mm; background: white; color: black; }
     
@@ -124,12 +121,22 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-// 確保整個網頁載入完成後才執行程式碼，防止版面遺失
+// 確保整個網頁載入完成後才執行程式碼
 window.onload = function() {
 
   window.toggleOtherTitle = function() {
     const type = document.getElementById('pTitleType').value;
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
+  }
+
+  // 安全的正則表達式萃取函數
+  function getSafeMatches(text, regex) {
+      let matches = [];
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+          matches.push(match[1]);
+      }
+      return matches;
   }
 
   // ==========================================
@@ -143,9 +150,10 @@ window.onload = function() {
     tableContainer.innerHTML = '';
 
     for(let i=1; i<=qty; i++) {
+        // Model No 保持純手動輸入
         container.innerHTML += `<div style="display:flex; flex-direction:column; width: 100%;">
             <label style="font-size:12px;">Model No. (機組 ${i})</label>
-            <input type="text" id="outModel_${i}" placeholder="輸入機號...">
+            <input type="text" id="outModel_${i}" placeholder="請手動輸入機號...">
         </div>`;
         
         tableContainer.innerHTML += `
@@ -170,34 +178,36 @@ window.onload = function() {
         </table>`;
     }
   }
-  // 初始化室外機版面
   updateOutdoorModels();
 
-  // 室外機 OCR 邏輯
+  // 室外機 OCR 邏輯 (純抓數據，不碰 Model No)
   document.getElementById('runOutdoorOcr').onclick = async () => {
-    const file = document.getElementById('imgOutdoor').files[0];
-    if(!file) return alert("請上傳 Outdoor 圖片！");
-    document.getElementById('msgOutdoor').innerText = "辨識中...";
-    
-    const { data: { text } } = await Tesseract.recognize(file, 'eng');
-    
-    const getMatches = (regex) => [...text.matchAll(regex)].map(m => m[1]);
-    
-    const hsMatches = getMatches(/63HS\s*=?\s*([\d.]+)/gi);
-    const lsMatches = getMatches(/63LS\s*=?\s*([\d.]+)/gi);
-    const th4Matches = getMatches(/TH4\s*=?\s*([\d.]+)/gi);
-    const freqMatches = getMatches(/(?:F\/Hz|FOS\(Hz\)|FOC\(Hz\))\s*=?\s*([\d.]+)/gi);
+    try {
+        const file = document.getElementById('imgOutdoor').files[0];
+        if(!file) return alert("請上傳 Outdoor 圖片！");
+        document.getElementById('msgOutdoor').innerText = "辨識中...請稍候";
+        
+        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        
+        const hsMatches = getSafeMatches(text, /63HS\s*=?\s*([\d.]+)/gi);
+        const lsMatches = getSafeMatches(text, /63LS\s*=?\s*([\d.]+)/gi);
+        const th4Matches = getSafeMatches(text, /TH4\s*=?\s*([\d.]+)/gi);
+        const freqMatches = getSafeMatches(text, /(?:F\/Hz|FOS\(Hz\)|FOC\(Hz\))\s*=?\s*([\d.]+)/gi);
 
-    const qty = parseInt(document.getElementById('outQty').value);
-    
-    for(let i=1; i<=qty; i++) {
-        const index = i - 1;
-        if(document.getElementById(`out_hs_${i}`)) document.getElementById(`out_hs_${i}`).value = hsMatches[index] || '';
-        if(document.getElementById(`out_ls_${i}`)) document.getElementById(`out_ls_${i}`).value = lsMatches[index] || '';
-        if(document.getElementById(`out_th4_${i}`)) document.getElementById(`out_th4_${i}`).value = th4Matches[index] || '';
-        if(document.getElementById(`out_freq_${i}`)) document.getElementById(`out_freq_${i}`).value = freqMatches[index] || '';
+        const qty = parseInt(document.getElementById('outQty').value);
+        
+        for(let i=1; i<=qty; i++) {
+            const index = i - 1;
+            if(document.getElementById(`out_hs_${i}`)) document.getElementById(`out_hs_${i}`).value = hsMatches[index] || '';
+            if(document.getElementById(`out_ls_${i}`)) document.getElementById(`out_ls_${i}`).value = lsMatches[index] || '';
+            if(document.getElementById(`out_th4_${i}`)) document.getElementById(`out_th4_${i}`).value = th4Matches[index] || '';
+            if(document.getElementById(`out_freq_${i}`)) document.getElementById(`out_freq_${i}`).value = freqMatches[index] || '';
+        }
+        document.getElementById('msgOutdoor').innerText = "辨識完成！資料已自動填入表格。";
+    } catch (err) {
+        alert("OCR發生錯誤: " + err.message);
+        document.getElementById('msgOutdoor').innerText = "辨識失敗。";
     }
-    document.getElementById('msgOutdoor').innerText = "辨識完成！";
   };
 
 
@@ -213,11 +223,24 @@ window.onload = function() {
     return n;
   }
 
+  function saveCurrentIndoorData() {
+      cumulativeIndoorData = [];
+      const rows = document.querySelectorAll('#indoorTableBody tr');
+      rows.forEach(tr => {
+          const inputs = tr.querySelectorAll('input');
+          if(inputs.length >= 6 && inputs[0].value.trim() !== '') {
+              cumulativeIndoorData.push([
+                  inputs[0].value, inputs[1].value, inputs[2].value, 
+                  inputs[3].value, inputs[4].value, inputs[5].value
+              ]);
+          }
+      });
+  }
+
   function renderIndoorTable() {
     const tbody = document.getElementById('indoorTableBody');
     tbody.innerHTML = '';
     
-    // 如果目前還沒有資料，預設顯示 3 行空白列，防止版面看起來遺失
     if (cumulativeIndoorData.length === 0) {
         for(let i=0; i<3; i++) {
             const tr = document.createElement('tr');
@@ -234,130 +257,157 @@ window.onload = function() {
         tbody.appendChild(tr);
     });
   }
-  // 初始化室內機版面
+  
   renderIndoorTable();
 
   document.getElementById('runIndoorOcr').onclick = async () => {
-    const file = document.getElementById('imgIndoor').files[0];
-    if(!file) return alert("請上傳 Indoor 圖片！");
-    document.getElementById('msgIndoor').innerText = "辨識中...";
-    
-    const { data: { text } } = await Tesseract.recognize(file, 'eng');
-    const lines = text.split('\n').filter(l => l.trim().length > 10);
-    
-    lines.forEach(line => {
-      const p = line.split(/\s+/).filter(x => x.length > 0);
-      if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-        cumulativeIndoorData.push([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[6]), "Cooling", "Cool ON"]);
-      }
-    });
-    renderIndoorTable();
-    document.getElementById('msgIndoor').innerText = "辨識完成，已加入表格並排序！";
+    try {
+        const file = document.getElementById('imgIndoor').files[0];
+        if(!file) return alert("請上傳 Indoor 圖片！");
+        document.getElementById('msgIndoor').innerText = "辨識中...請稍候";
+        
+        saveCurrentIndoorData(); 
+        
+        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        const lines = text.split('\n').filter(l => l.trim().length > 10);
+        
+        lines.forEach(line => {
+          const p = line.split(/\s+/).filter(x => x.length > 0);
+          if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
+            cumulativeIndoorData.push([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[6]), "Cooling", "Cool ON"]);
+          }
+        });
+        renderIndoorTable();
+        document.getElementById('msgIndoor').innerText = "辨識完成，已加入表格並排序！";
+    } catch (err) {
+        alert("OCR發生錯誤: " + err.message);
+        document.getElementById('msgIndoor').innerText = "辨識失敗。";
+    }
   };
 
 
   // ==========================================
-  // 3. 生成 PDF (已修正崩潰問題)
+  // 3. 生成 PDF
   // ==========================================
   document.getElementById('genPdf').onclick = async () => {
-    const pdfArea = document.getElementById('pdfContentArea');
-    pdfArea.innerHTML = ''; 
+    try {
+        const pdfArea = document.getElementById('pdfContentArea');
+        let htmlContent = ''; 
 
-    // --- Section A: Outdoor ---
-    pdfArea.innerHTML += `<div class="pdf-section-title">A. Service Report - Outdoor Unit</div>`;
-    const qty = parseInt(document.getElementById('outQty').value);
-    for(let i=1; i<=qty; i++) {
-        const modelNo = document.getElementById(`outModel_${i}`).value || 'N/A';
-        pdfArea.innerHTML += `<div class="pdf-model-text">Model No.: ${modelNo}</div>`;
+        // --- Section A: Outdoor ---
+        htmlContent += `<div class="pdf-section-title">A. Service Report - Outdoor Unit</div>`;
+        const qty = parseInt(document.getElementById('outQty').value);
+        for(let i=1; i<=qty; i++) {
+            const modelNo = document.getElementById(`outModel_${i}`).value || 'N/A';
+            htmlContent += `<div class="pdf-model-text">Model No.: ${modelNo}</div>`;
+            
+            const v_hs = document.getElementById(`out_hs_${i}`) ? document.getElementById(`out_hs_${i}`).value : '';
+            const v_ls = document.getElementById(`out_ls_${i}`) ? document.getElementById(`out_ls_${i}`).value : '';
+            const v_th4 = document.getElementById(`out_th4_${i}`) ? document.getElementById(`out_th4_${i}`).value : '';
+            const v_freq = document.getElementById(`out_freq_${i}`) ? document.getElementById(`out_freq_${i}`).value : '';
+
+            htmlContent += `
+            <table class="pdf-table">
+                <thead>
+                    <tr>
+                        <th style="width:25%">Refrigerant High Pressure (MPa)</th>
+                        <th style="width:25%">Refrigerant Low Pressure (MPa)</th>
+                        <th style="width:25%">Discharge Temperature ℃</th>
+                        <th style="width:25%">Compressor Operating Frequency (Hz)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>${v_hs}</td><td>${v_ls}</td><td>${v_th4}</td><td>${v_freq}</td></tr>
+                </tbody>
+            </table>`;
+        }
+
+        // --- Section B: Indoor ---
+        htmlContent += `<div class="pdf-section-title" style="page-break-before: auto;">B. Service Report - Indoor Unit</div>`;
         
-        const v_hs = document.getElementById(`out_hs_${i}`).value || '-';
-        const v_ls = document.getElementById(`out_ls_${i}`).value || '-';
-        const v_th4 = document.getElementById(`out_th4_${i}`).value || '-';
-        const v_freq = document.getElementById(`out_freq_${i}`).value || '-';
+        let inBody = '';
+        const indoorRows = document.querySelectorAll('#indoorTableBody tr');
+        indoorRows.forEach(tr => {
+            const inputs = tr.querySelectorAll('input');
+            if(inputs.length >= 6 && inputs[0].value.trim() !== '') {
+                inBody += `<tr>
+                    <td>${inputs[0].value}</td>
+                    <td>${inputs[1].value}</td>
+                    <td>${inputs[2].value}</td>
+                    <td>${inputs[3].value}</td>
+                    <td>${inputs[4].value}</td>
+                    <td>${inputs[5].value}</td>
+                </tr>`;
+            }
+        });
 
-        let outHtml = `
+        if(inBody === '') {
+            inBody = `<tr><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
+        }
+
+        htmlContent += `
         <table class="pdf-table">
             <thead>
-                <tr>
-                    <th style="width:25%">Refrigerant High Pressure (MPa)</th>
-                    <th style="width:25%">Refrigerant Low Pressure (MPa)</th>
-                    <th style="width:25%">Discharge Temperature ℃</th>
-                    <th style="width:25%">Compressor Operating Frequency (Hz)</th>
-                </tr>
+            <tr>
+                <th style="width:10%">ID No.</th>
+                <th style="width:18%">Cooling Capacity (kW)</th>
+                <th style="width:18%">Cooling Air Supply Temperature ℃</th>
+                <th style="width:18%">Cooling Air Return Temperature ℃</th>
+                <th style="width:18%">AC Mode</th>
+                <th style="width:18%">Status</th>
+            </tr>
             </thead>
-            <tbody>
-                <tr><td>${v_hs}</td><td>${v_ls}</td><td>${v_th4}</td><td>${v_freq}</td></tr>
-            </tbody>
+            <tbody>${inBody}</tbody>
         </table>`;
-        pdfArea.innerHTML += outHtml;
-    }
 
-    // --- Section B: Indoor ---
-    pdfArea.innerHTML += `<div class="pdf-section-title" style="page-break-before: auto;">B. Service Report - Indoor Unit</div>`;
-    let inBody = '';
-    cumulativeIndoorData.forEach(row => {
-        inBody += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td>${row[4]}</td><td>${row[5]}</td></tr>`;
-    });
-    pdfArea.innerHTML += `
-    <table class="pdf-table">
-        <thead>
-        <tr>
-            <th style="width:10%">ID No.</th>
-            <th style="width:18%">Cooling Capacity (kW)</th>
-            <th style="width:18%">Cooling Air Supply Temperature ℃</th>
-            <th style="width:18%">Cooling Air Return Temperature ℃</th>
-            <th style="width:18%">AC Mode</th>
-            <th style="width:18%">Status</th>
-        </tr>
-        </thead>
-        <tbody>${inBody}</tbody>
-    </table>`;
+        pdfArea.innerHTML = htmlContent;
 
-    const opt = {
-      margin: [78, 10, 15, 10], 
-      filename: 'REC_Service_Report.pdf',
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 3, useCORS: true, scrollY: 0 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
+        const opt = {
+          margin: [78, 10, 15, 10], 
+          filename: 'REC_Service_Report.pdf',
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 3, useCORS: true, scrollY: 0 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
 
-    html2pdf().set(opt).from(pdfArea).toPdf().get('pdf').then(function (pdf) {
-        var totalPages = pdf.internal.getNumberOfPages();
-        var companySelect = document.getElementById('companySelect').value;
-        var companyText = (companySelect === 'RCL') 
+        const companySelect = document.getElementById('companySelect').value;
+        const companyText = (companySelect === 'RCL') 
             ? 'REC Engineering Contracting Company Limited' 
             : 'REC Engineering Company Limited';
             
-        var type = document.getElementById('pTitleType').value;
-        var finalTitle = (type === 'Other') ? document.getElementById('pTitleOther').value : type;
-        var pName = document.getElementById('pName').value;
-        var pLoc = document.getElementById('pLoc').value;
-        var pTime = document.getElementById('pTime').value;
+        const type = document.getElementById('pTitleType').value;
+        const finalTitle = (type === 'Other') ? document.getElementById('pTitleOther').value : type;
+        const pName = document.getElementById('pName').value;
+        const pLoc = document.getElementById('pLoc').value;
+        const pTime = document.getElementById('pTime').value;
 
-        for (var i = 1; i <= totalPages; i++) {
-            pdf.setPage(i);
-            pdf.setTextColor(0, 0, 0);
-            pdf.setFont("times", "bold");
+        html2pdf().set(opt).from(pdfArea).toPdf().get('pdf').then(function (pdf) {
+            var totalPages = pdf.internal.getNumberOfPages();
 
-            // Line 1: 公司名稱
-            pdf.setFontSize(14);
-            pdf.text(companyText, 10, 24);
+            for (var i = 1; i <= totalPages; i++) {
+                pdf.setPage(i);
+                pdf.setTextColor(0, 0, 0);
+                pdf.setFont("times", "bold");
 
-            // Line 2: 報告標題 (取消會引發錯誤的底線計算，改為純文字置中)
-            pdf.setFontSize(19);
-            pdf.text(finalTitle, 105, 41, { align: 'center' });
+                pdf.setFontSize(14);
+                pdf.text(companyText, 10, 24);
 
-            // Line 3~5: 項目細節
-            pdf.setFontSize(9);
-            pdf.text('Project Name : ' + pName, 10, 55);
-            pdf.text('Location : ' + pLoc, 10, 63);
-            pdf.text('Inspection Period : ' + pTime, 10, 71);
+                pdf.setFontSize(19);
+                pdf.text(finalTitle, 105, 41, { align: 'center' });
 
-            // 每頁最底放置頁碼
-            pdf.setFontSize(7.5);
-            pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
-        }
-    }).save();
+                pdf.setFontSize(9);
+                pdf.text('Project Name : ' + pName, 10, 55);
+                pdf.text('Location : ' + pLoc, 10, 63);
+                pdf.text('Inspection Period : ' + pTime, 10, 71);
+
+                pdf.setFontSize(7.5);
+                pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
+            }
+        }).save();
+        
+    } catch(err) {
+        alert("PDF 生成錯誤: " + err.message);
+    }
   };
 
 }; // window.onload 結束
