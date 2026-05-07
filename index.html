@@ -4,46 +4,40 @@
   <meta charset="UTF-8">
   <title>REC - Service Report (Mitsubishi Electric VRF System)</title>
   <style>
-    /* 全域 Times New Roman */
     * { box-sizing: border-box; font-family: "Times New Roman", Times, serif; }
     body { background: #f4f7f9; padding: 20px; display: flex; flex-direction: column; align-items: center; }
     .main-box { width: 100%; max-width: 1100px; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     
-    .input-area { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+    /* 上方輸入區改為 5 欄，以容納 Company 選單 */
+    .input-area { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 20px; }
     .field { display: flex; flex-direction: column; font-size: 14px; font-weight: bold; }
     input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 5px; font-family: "Times New Roman"; }
 
+    .section-title { font-size: 18px; font-weight: bold; color: #0f766e; border-bottom: 2px solid #0f766e; padding-bottom: 5px; margin-top: 30px; margin-bottom: 15px; }
+    
     .controls { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
-    button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-    .btn-ocr { background: #0f766e; color: white; }
-    .btn-pdf { background: #58a6b3; color: white; margin-left: auto; }
+    button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+    .btn-ocr { background: #0f766e; }
+    .btn-pdf { background: #58a6b3; font-size: 16px; padding: 12px 25px; margin-top: 20px; width: 100%; }
 
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
     th { background: #f8f9fa; font-size: 12px; }
-    td input { width: 100%; border: none; text-align: center; font-size: 15px; background: #fffbe6; }
+    td input { width: 100%; border: none; text-align: center; font-size: 14px; background: #fffbe6; }
 
-    /* PDF 渲染層：絕對定位與防空白頁設定 */
-    #pdf-wrapper { position: absolute; left: -9999px; width: 210mm; height: 297mm; overflow: hidden; } 
-    .pdf-sheet { width: 210mm; height: 297mm; background: white; color: black; position: relative; padding: 0; margin: 0; }
+    /* PDF 渲染層 (隱藏) */
+    #pdf-wrapper { position: absolute; left: -9999px; } 
+    #pdfContentArea { width: 190mm; background: white; color: black; }
     
-    /* 字型大小全部減2號 */
-    .line-1 { position: absolute; top: 1.95cm; left: 10mm; width: 190mm; font-size: 14pt; font-weight: bold; } /* 16pt -> 14pt */
-    .line-2 { position: absolute; top: 3.5cm; left: 10mm; width: 190mm; font-size: 19pt; font-weight: bold; text-align: center; text-decoration: underline; } /* 21pt -> 19pt */
-    .line-3 { position: absolute; top: 5.2cm; left: 10mm; width: 190mm; font-size: 9pt; font-weight: bold; } /* 11pt -> 9pt */
-    .line-4 { position: absolute; top: 6cm; left: 10mm; width: 190mm; font-size: 9pt; font-weight: bold; } /* 11pt -> 9pt */
-    .line-5 { position: absolute; top: 6.8cm; left: 10mm; width: 190mm; font-size: 9pt; font-weight: bold; } /* 11pt -> 9pt */
-    .line-table { position: absolute; top: 7.8cm; left: 10mm; width: 190mm; }
+    .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
+    .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    /* Table 表格排版 */
-    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0.8cm; }
+    .pdf-table tr { page-break-inside: avoid; } /* 防止行被切斷 */
     .pdf-table th, .pdf-table td { 
         border: 1px solid black !important; 
-        padding: 0.15cm 1px; /* 上下各加0.15cm，總高度增加0.3cm */
-        font-size: 7.5pt; 
-        text-align: center;      /* 水平置中 */
-        vertical-align: middle;  /* 垂直置中 */
-        word-wrap: break-word;   /* 允許長字串自動換行 */
+        padding: 0.15cm 1px; 
+        font-size: 7.5pt; text-align: center; vertical-align: middle; word-wrap: break-word; 
     }
     .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.2; }
   </style>
@@ -54,6 +48,12 @@
   <h2 style="color:#0f766e">REC - Service Report (Mitsubishi Electric VRF System)</h2>
   
   <div class="input-area">
+    <div class="field">Company
+        <select id="companySelect">
+            <option value="RCL">1. RCL</option>
+            <option value="REC">2. REC</option>
+        </select>
+    </div>
     <div class="field">Project Name<input type="text" id="pName"></div>
     <div class="field">Location<input type="text" id="pLoc"></div>
     <div class="field">Inspection Period<input type="text" id="pTime"></div>
@@ -67,57 +67,51 @@
     </div>
   </div>
 
-  <div class="field" style="margin-bottom:15px;">
-    Upload Screenshot<input type="file" id="imgFile" accept="image/*">
+  <div class="section-title">A. Service Report - Outdoor Unit</div>
+  <div class="input-area" style="grid-template-columns: 1fr 4fr;">
+    <div class="field">Outdoor Unit Qty
+      <select id="outQty" onchange="updateOutdoorModels()">
+        <option value="1">1 部</option>
+        <option value="2">2 部 (雙拼機)</option>
+        <option value="3">3 部 (三拼機)</option>
+      </select>
+    </div>
+    <div class="field" id="modelInputsContainer" style="display:flex; flex-direction:row; gap:10px;">
+      </div>
   </div>
-
+  
   <div class="controls">
-    <button class="btn-ocr" id="runOcr">1. Extract Data</button>
-    <span id="msg" style="font-size:13px; color:#666;">Ready.</span>
-    <button class="btn-pdf" id="genPdf">2. Download PDF</button>
+    <input type="file" id="imgOutdoor" accept="image/*">
+    <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor (測試中)</button>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">請輸入 Model No.，等待後續 OCR 規則補上</span>
   </div>
+  
+  <div id="outdoorTablesContainer">
+    </div>
 
+
+  <div class="section-title">B. Service Report - Indoor Unit</div>
+  <div class="controls">
+    <input type="file" id="imgIndoor" accept="image/*">
+    <button class="btn-ocr" id="runIndoorOcr">Extract & Add Indoor Data</button>
+    <span id="msgIndoor" style="font-size:12px; color:#666;">支援累積上傳與自動排序</span>
+  </div>
+  
   <table>
     <thead>
       <tr>
-        <th>ID No.</th>
-        <th>Cooling Capacity (kW)</th>
-        <th>Cooling Air Supply Temperature℃</th>
-        <th>Cooling Air Return Temperature℃</th>
-        <th>AC Mode</th>
-        <th>Status</th>
+        <th>ID No.</th><th>Cooling Capacity (kW)</th><th>Cooling Air Supply Temp ℃</th><th>Cooling Air Return Temp ℃</th><th>AC Mode</th><th>Status</th>
       </tr>
     </thead>
-    <tbody id="tableBody"></tbody>
+    <tbody id="indoorTableBody"></tbody>
   </table>
+
+  <button class="btn-pdf" id="genPdf">⬇ Generate & Download Final PDF</button>
+
 </div>
 
-<!-- PDF 模板區域 -->
 <div id="pdf-wrapper">
-  <div class="pdf-sheet" id="pdfTemplate">
-    <div class="line-1">REC Engineering Contracting Company Limited</div>
-    <div class="line-2"><span id="outTitle"></span></div>
-    <div class="line-3">Project Name : <span id="outName"></span></div>
-    <div class="line-4">Location : <span id="outLoc"></span></div>
-    <div class="line-5">Inspection Period : <span id="outTime"></span></div>
-
-    <div class="line-table">
-        <table class="pdf-table">
-          <thead>
-            <tr>
-              <!-- ID佔10%，其餘5列平均分配各18% (18*5 = 90) -->
-              <th style="width:10%">ID No.</th>
-              <th style="width:18%">Cooling Capacity (kW)</th>
-              <th style="width:18%">Cooling Air Supply Temperature ℃</th>
-              <th style="width:18%">Cooling Air Return Temperature ℃</th>
-              <th style="width:18%">AC Mode</th>
-              <th style="width:18%">Status</th>
-            </tr>
-          </thead>
-          <tbody id="outBody"></tbody>
-        </table>
-    </div>
-  </div>
+  <div id="pdfContentArea"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -129,77 +123,167 @@
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
   }
 
+  // ==========================================
+  // 1. 動態處理室外機 (Outdoor) 數量與輸入框
+  // ==========================================
+  function updateOutdoorModels() {
+    const qty = parseInt(document.getElementById('outQty').value);
+    const container = document.getElementById('modelInputsContainer');
+    const tableContainer = document.getElementById('outdoorTablesContainer');
+    container.innerHTML = '';
+    tableContainer.innerHTML = '';
+
+    for(let i=1; i<=qty; i++) {
+        container.innerHTML += `<div style="display:flex; flex-direction:column; width: 100%;">
+            <label style="font-size:12px;">Model No. (機組 ${i})</label>
+            <input type="text" id="outModel_${i}" placeholder="輸入機號...">
+        </div>`;
+        
+        // 測試用 Outdoor 表格
+        tableContainer.innerHTML += `
+        <h4 style="margin-bottom:5px;">Outdoor Unit ${i} Data</h4>
+        <table id="outdoorTable_${i}">
+            <thead><tr><th>Outdoor ID</th><th>Test Value 1</th><th>Test Value 2</th></tr></thead>
+            <tbody><tr><td><input type="text"></td><td><input type="text"></td><td><input type="text"></td></tr></tbody>
+        </table>`;
+    }
+  }
+  updateOutdoorModels();
+
+  // ==========================================
+  // 2. 處理室內機 (Indoor) 累積與排序邏輯
+  // ==========================================
+  let cumulativeIndoorData = []; 
+
   function smartFix(val) {
     if(!val) return '';
     let n = val.replace(/[^0-9.]/g, ''); 
-    if (n.length >= 2 && !n.includes('.') && parseFloat(n) > 50) {
-      return (parseFloat(n) / 10).toFixed(1);
-    }
+    if (n.length >= 2 && !n.includes('.') && parseFloat(n) > 50) return (parseFloat(n) / 10).toFixed(1);
     return n;
   }
 
-  const tableBody = document.getElementById('tableBody');
-  function addRow(d = ['', '', '', '', '', '']) {
-    const tr = document.createElement('tr');
-    d.forEach(v => tr.innerHTML += `<td><input type="text" value="${v}"></td>`);
-    tableBody.appendChild(tr);
+  function renderIndoorTable() {
+    const tbody = document.getElementById('indoorTableBody');
+    tbody.innerHTML = '';
+    cumulativeIndoorData.sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    cumulativeIndoorData.forEach(row => {
+        const tr = document.createElement('tr');
+        row.forEach(val => tr.innerHTML += `<td><input type="text" value="${val}"></td>`);
+        tbody.appendChild(tr);
+    });
   }
-  for(let i=0; i<3; i++) addRow();
 
-  document.getElementById('runOcr').onclick = async () => {
-    const file = document.getElementById('imgFile').files[0];
-    if(!file) return alert("Please upload image!");
-    document.getElementById('msg').innerText = "Processing...";
+  document.getElementById('runIndoorOcr').onclick = async () => {
+    const file = document.getElementById('imgIndoor').files[0];
+    if(!file) return alert("請上傳 Indoor 圖片！");
+    document.getElementById('msgIndoor').innerText = "辨識中...";
     
     const { data: { text } } = await Tesseract.recognize(file, 'eng');
     const lines = text.split('\n').filter(l => l.trim().length > 10);
     
-    tableBody.innerHTML = '';
     lines.forEach(line => {
       const p = line.split(/\s+/).filter(x => x.length > 0);
       if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-        addRow([
-          p[0], 
-          p[1].replace(',',''), 
-          smartFix(p[4]), 
-          smartFix(p[6]), 
-          "Cooling", 
-          "Cool ON"
-        ]);
+        cumulativeIndoorData.push([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[6]), "Cooling", "Cool ON"]);
       }
     });
-    document.getElementById('msg').innerText = "Extraction complete.";
+    renderIndoorTable();
+    document.getElementById('msgIndoor').innerText = "辨識完成，已加入表格並排序！";
   };
 
+
+  // ==========================================
+  // 3. 生成 PDF (含每頁重複的動態 Header 與 頁碼)
+  // ==========================================
   document.getElementById('genPdf').onclick = async () => {
-    const type = document.getElementById('pTitleType').value;
-    const finalTitle = (type === 'Other') ? document.getElementById('pTitleOther').value : type;
-    
-    document.getElementById('outName').innerText = document.getElementById('pName').value;
-    document.getElementById('outLoc').innerText = document.getElementById('pLoc').value;
-    document.getElementById('outTime').innerText = document.getElementById('pTime').value;
-    document.getElementById('outTitle').innerText = finalTitle;
+    const pdfArea = document.getElementById('pdfContentArea');
+    pdfArea.innerHTML = ''; 
 
-    const outBody = document.getElementById('outBody');
-    outBody.innerHTML = '';
-    document.querySelectorAll('#tableBody tr').forEach(tr => {
-      const inp = tr.querySelectorAll('input');
-      if(inp[0].value.trim() !== "") { 
-          const row = document.createElement('tr');
-          const vals = [inp[0].value, inp[1].value, inp[2].value, inp[3].value, inp[4].value, inp[5].value];
-          vals.forEach(v => row.innerHTML += `<td>${v}</td>`);
-          outBody.appendChild(row);
-      }
+    // --- 構建 Section A: Outdoor 內容 ---
+    pdfArea.innerHTML += `<div class="pdf-section-title">A. Service Report - Outdoor Unit</div>`;
+    const qty = parseInt(document.getElementById('outQty').value);
+    for(let i=1; i<=qty; i++) {
+        const modelNo = document.getElementById(`outModel_${i}`).value || 'N/A';
+        pdfArea.innerHTML += `<div class="pdf-model-text">Model No.: ${modelNo}</div>`;
+        let outHtml = `<table class="pdf-table"><thead><tr><th style="width:10%">ID</th><th style="width:45%">Test Value 1</th><th style="width:45%">Test Value 2</th></tr></thead><tbody><tr><td>-</td><td>-</td><td>-</td></tr></tbody></table>`;
+        pdfArea.innerHTML += outHtml;
+    }
+
+    // --- 構建 Section B: Indoor 內容 ---
+    pdfArea.innerHTML += `<div class="pdf-section-title" style="page-break-before: auto;">B. Service Report - Indoor Unit</div>`;
+    let inBody = '';
+    cumulativeIndoorData.forEach(row => {
+        inBody += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td>${row[4]}</td><td>${row[5]}</td></tr>`;
     });
+    pdfArea.innerHTML += `
+    <table class="pdf-table">
+        <thead>
+        <tr>
+            <th style="width:10%">ID No.</th>
+            <th style="width:18%">Cooling Capacity (kW)</th>
+            <th style="width:18%">Cooling Air Supply Temperature ℃</th>
+            <th style="width:18%">Cooling Air Return Temperature ℃</th>
+            <th style="width:18%">AC Mode</th>
+            <th style="width:18%">Status</th>
+        </tr>
+        </thead>
+        <tbody>${inBody}</tbody>
+    </table>`;
 
+    // --- 設定 html2pdf，並設定 Top Margin 預留 Header 的空間 (78mm) ---
     const opt = {
-      margin: 0,
+      margin: [78, 10, 15, 10], // 上 78mm, 左 10mm, 下 15mm, 右 10mm
       filename: 'REC_Service_Report.pdf',
-      html2canvas: { scale: 3, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: 'avoid-all' }
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 3, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
-    html2pdf().set(opt).from(document.getElementById('pdfTemplate')).save();
+
+    // 擷取表格後，在「每一頁」畫上標題與頁碼
+    html2pdf().set(opt).from(pdfArea).toPdf().get('pdf').then(function (pdf) {
+        var totalPages = pdf.internal.getNumberOfPages();
+
+        // 取得前端填寫的變數
+        var companySelect = document.getElementById('companySelect').value;
+        var companyText = (companySelect === 'RCL') 
+            ? 'REC Engineering Contracting Company Limited' 
+            : 'REC Engineering Company Limited';
+            
+        var type = document.getElementById('pTitleType').value;
+        var finalTitle = (type === 'Other') ? document.getElementById('pTitleOther').value : type;
+        
+        var pName = document.getElementById('pName').value;
+        var pLoc = document.getElementById('pLoc').value;
+        var pTime = document.getElementById('pTime').value;
+
+        // 跑迴圈為每一頁加上一樣的 Header
+        for (var i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFont("times", "bold");
+
+            // Line 1: 公司名稱 (置左，高度精準還原原本的 1.95cm)
+            pdf.setFontSize(14);
+            pdf.text(companyText, 10, 24);
+
+            // Line 2: 報告標題 (置中並畫底線)
+            pdf.setFontSize(19);
+            pdf.text(finalTitle, 105, 41, { align: 'center' });
+            var textWidth = pdf.getStringUnitWidth(finalTitle) * 19 / pdf.internal.scaleFactor;
+            pdf.setLineWidth(0.5);
+            pdf.line(105 - textWidth/2, 42.5, 105 + textWidth/2, 42.5);
+
+            // Line 3~5: 項目細節
+            pdf.setFontSize(9);
+            pdf.text('Project Name : ' + pName, 10, 55);
+            pdf.text('Location : ' + pLoc, 10, 63);
+            pdf.text('Inspection Period : ' + pTime, 10, 71);
+
+            // 每頁最底放置頁碼 (如：1 of 2)
+            pdf.setFontSize(7.5);
+            pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
+        }
+    }).save();
   };
 </script>
 </body>
