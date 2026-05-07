@@ -17,6 +17,8 @@
     .controls { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
     button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
     .btn-ocr { background: #0f766e; }
+    /* 新增清空按鈕樣式 (紅色) */
+    .btn-clear { background: #dc3545; }
     .btn-pdf { background: #58a6b3; font-size: 16px; padding: 12px 25px; margin-top: 20px; width: 100%; }
 
     table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
@@ -30,7 +32,6 @@
         left: -9999px; 
         top: 0;
     } 
-    /* 修正寬度為 188mm 預留緩衝，確保右側框線 100% 顯示 */
     #pdfContentArea { width: 188mm; background: white; color: black; margin: 0 auto; box-sizing: border-box; }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
@@ -38,8 +39,6 @@
 
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0.8cm; }
     .pdf-table tr { page-break-inside: avoid; }
-    
-    /* 框線設為最幼 (0.5pt)，並強制文字換行 */
     .pdf-table th, .pdf-table td { 
         border: 0.5pt solid #000 !important; 
         padding: 0.15cm 1px; 
@@ -101,6 +100,7 @@
   <div class="controls">
     <input type="file" id="imgIndoor" accept="image/*">
     <button class="btn-ocr" id="runIndoorOcr">Extract & Add Indoor Data</button>
+    <button class="btn-clear" id="clearIndoorBtn">清空表格</button>
     <span id="msgIndoor" style="font-size:12px; color:#666;">支援累積上傳與自動排序 (可隨時手動修改數值)</span>
   </div>
   
@@ -132,7 +132,6 @@ window.onload = function() {
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
   }
 
-  // 安全正則表達式，容錯率更高
   function getSafeMatches(text, regex) {
       let matches = [];
       let match;
@@ -182,7 +181,6 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
-  // 室外機強化版 OCR
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
         const file = document.getElementById('imgOutdoor').files[0];
@@ -191,7 +189,6 @@ window.onload = function() {
         
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
         
-        // 強化 Regex: 容忍更多空格與不同的符號
         const hsMatches = getSafeMatches(text, /63HS\s*[=:]?\s*([\d.]+)/gi);
         const lsMatches = getSafeMatches(text, /63LS\s*[=:]?\s*([\d.]+)/gi);
         const th4Matches = getSafeMatches(text, /TH4\s*[=:]?\s*([\d.]+)/gi);
@@ -277,7 +274,6 @@ window.onload = function() {
         lines.forEach(line => {
           const p = line.split(/\s+/).filter(x => x.length > 0);
           if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-            // 已修正順序：[0]ID, [1]Capacity, p[6]為TH3(Supply), p[4]為TH1(Return)
             let th3 = p.length > 6 ? smartFix(p[6]) : '';
             let th1 = p.length > 4 ? smartFix(p[4]) : '';
             cumulativeIndoorData.push([p[0], p[1].replace(',',''), th3, th1, "Cooling", "Cool ON"]);
@@ -291,9 +287,19 @@ window.onload = function() {
     }
   };
 
+  // 新增清空室內機表格按鈕功能
+  document.getElementById('clearIndoorBtn').onclick = () => {
+      if(confirm("確定要清空所有室內機資料嗎？此動作無法復原。")) {
+          cumulativeIndoorData = []; // 清空陣列
+          renderIndoorTable(); // 重新渲染為預設 3 行空白
+          document.getElementById('imgIndoor').value = ''; // 清除已選擇的檔案
+          document.getElementById('msgIndoor').innerText = "表格已清空，可重新上傳辨識。";
+      }
+  };
+
 
   // ==========================================
-  // 3. 生成 PDF (強化細線與寬度適應)
+  // 3. 生成 PDF
   // ==========================================
   document.getElementById('genPdf').onclick = async () => {
     try {
@@ -368,9 +374,8 @@ window.onload = function() {
 
         pdfArea.innerHTML = htmlContent;
 
-        // scale 提高到 4 以確保 0.5pt 最細線條清晰不被截斷
         const opt = {
-          margin: [78, 11, 15, 11], // 左右留白 11mm，完美置中 188mm 寬度表格
+          margin: [78, 11, 15, 11], 
           filename: 'REC_Service_Report.pdf',
           image: { type: 'jpeg', quality: 1.0 },
           html2canvas: { scale: 4, useCORS: true, scrollY: 0 },
@@ -397,7 +402,7 @@ window.onload = function() {
                 pdf.setFont("times", "bold");
 
                 pdf.setFontSize(14);
-                pdf.text(companyText, 11, 24); // 配合 margin 微調起始點
+                pdf.text(companyText, 11, 24); 
 
                 pdf.setFontSize(19);
                 pdf.text(finalTitle, 105, 41, { align: 'center' });
@@ -417,7 +422,7 @@ window.onload = function() {
     }
   };
 
-}; // window.onload 結束
+}; 
 </script>
 </body>
 </html>
