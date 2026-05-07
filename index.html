@@ -17,7 +17,6 @@
     .controls { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
     button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
     .btn-ocr { background: #0f766e; }
-    /* 新增清空按鈕樣式 (紅色) */
     .btn-clear { background: #dc3545; }
     .btn-pdf { background: #58a6b3; font-size: 16px; padding: 12px 25px; margin-top: 20px; width: 100%; }
 
@@ -32,12 +31,21 @@
         left: -9999px; 
         top: 0;
     } 
-    #pdfContentArea { width: 188mm; background: white; color: black; margin: 0 auto; box-sizing: border-box; }
+    /* 修正：加入 padding 緩衝區並稍微縮減寬度以配合 12mm 的 margin */
+    #pdfContentArea { 
+        width: 186mm; 
+        background: white; 
+        color: black; 
+        margin: 0 auto; 
+        box-sizing: border-box; 
+        padding: 2px; 
+    }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0.8cm; }
+    /* 修正：寬度改為 99.5% 置中，絕對防止最右側邊框被裁切 */
+    .pdf-table { width: 99.5%; border-collapse: collapse; table-layout: fixed; margin: 0 auto 0.8cm auto; }
     .pdf-table tr { page-break-inside: avoid; }
     .pdf-table th, .pdf-table td { 
         border: 0.5pt solid #000 !important; 
@@ -287,12 +295,11 @@ window.onload = function() {
     }
   };
 
-  // 新增清空室內機表格按鈕功能
   document.getElementById('clearIndoorBtn').onclick = () => {
       if(confirm("確定要清空所有室內機資料嗎？此動作無法復原。")) {
-          cumulativeIndoorData = []; // 清空陣列
-          renderIndoorTable(); // 重新渲染為預設 3 行空白
-          document.getElementById('imgIndoor').value = ''; // 清除已選擇的檔案
+          cumulativeIndoorData = []; 
+          renderIndoorTable(); 
+          document.getElementById('imgIndoor').value = ''; 
           document.getElementById('msgIndoor').innerText = "表格已清空，可重新上傳辨識。";
       }
   };
@@ -374,8 +381,9 @@ window.onload = function() {
 
         pdfArea.innerHTML = htmlContent;
 
+        // 配合修正後的邊界，Margin 改為左右 12mm，確保完美的排版空間
         const opt = {
-          margin: [78, 11, 15, 11], 
+          margin: [78, 12, 15, 12], 
           filename: 'REC_Service_Report.pdf',
           image: { type: 'jpeg', quality: 1.0 },
           html2canvas: { scale: 4, useCORS: true, scrollY: 0 },
@@ -401,16 +409,17 @@ window.onload = function() {
                 pdf.setTextColor(0, 0, 0);
                 pdf.setFont("times", "bold");
 
+                // 座標微調為 12，確保文字與表格左側完美對齊
                 pdf.setFontSize(14);
-                pdf.text(companyText, 11, 24); 
+                pdf.text(companyText, 12, 24); 
 
                 pdf.setFontSize(19);
                 pdf.text(finalTitle, 105, 41, { align: 'center' });
 
                 pdf.setFontSize(9);
-                pdf.text('Project Name : ' + pName, 11, 55);
-                pdf.text('Location : ' + pLoc, 11, 63);
-                pdf.text('Inspection Period : ' + pTime, 11, 71);
+                pdf.text('Project Name : ' + pName, 12, 55);
+                pdf.text('Location : ' + pLoc, 12, 63);
+                pdf.text('Inspection Period : ' + pTime, 12, 71);
 
                 pdf.setFontSize(7.5);
                 pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
