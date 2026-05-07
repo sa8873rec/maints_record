@@ -186,4 +186,157 @@
         if(document.getElementById(`out_hs_${i}`)) document.getElementById(`out_hs_${i}`).value = hsMatches[index] || '';
         if(document.getElementById(`out_ls_${i}`)) document.getElementById(`out_ls_${i}`).value = lsMatches[index] || '';
         if(document.getElementById(`out_th4_${i}`)) document.getElementById(`out_th4_${i}`).value = th4Matches[index] || '';
-        if(document.getElementById(`out_freq_${i}`)) document.getElementById(`out_freq_${i}`).value = freq
+        if(document.getElementById(`out_freq_${i}`)) document.getElementById(`out_freq_${i}`).value = freqMatches[index] || '';
+    }
+    document.getElementById('msgOutdoor').innerText = "辨識完成！";
+  };
+
+
+  // ==========================================
+  // 2. 處理室內機 (Indoor)
+  // ==========================================
+  let cumulativeIndoorData = []; 
+
+  function smartFix(val) {
+    if(!val) return '';
+    let n = val.replace(/[^0-9.]/g, ''); 
+    if (n.length >= 2 && !n.includes('.') && parseFloat(n) > 50) return (parseFloat(n) / 10).toFixed(1);
+    return n;
+  }
+
+  function renderIndoorTable() {
+    const tbody = document.getElementById('indoorTableBody');
+    tbody.innerHTML = '';
+    cumulativeIndoorData.sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    cumulativeIndoorData.forEach(row => {
+        const tr = document.createElement('tr');
+        row.forEach(val => tr.innerHTML += `<td><input type="text" value="${val}"></td>`);
+        tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('runIndoorOcr').onclick = async () => {
+    const file = document.getElementById('imgIndoor').files[0];
+    if(!file) return alert("請上傳 Indoor 圖片！");
+    document.getElementById('msgIndoor').innerText = "辨識中...";
+    
+    const { data: { text } } = await Tesseract.recognize(file, 'eng');
+    const lines = text.split('\n').filter(l => l.trim().length > 10);
+    
+    lines.forEach(line => {
+      const p = line.split(/\s+/).filter(x => x.length > 0);
+      if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
+        cumulativeIndoorData.push([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[6]), "Cooling", "Cool ON"]);
+      }
+    });
+    renderIndoorTable();
+    document.getElementById('msgIndoor').innerText = "辨識完成，已加入表格並排序！";
+  };
+
+
+  // ==========================================
+  // 3. 生成 PDF
+  // ==========================================
+  document.getElementById('genPdf').onclick = async () => {
+    const pdfArea = document.getElementById('pdfContentArea');
+    pdfArea.innerHTML = ''; 
+
+    // --- Section A: Outdoor ---
+    pdfArea.innerHTML += `<div class="pdf-section-title">A. Service Report - Outdoor Unit</div>`;
+    const qty = parseInt(document.getElementById('outQty').value);
+    for(let i=1; i<=qty; i++) {
+        const modelNo = document.getElementById(`outModel_${i}`).value || 'N/A';
+        pdfArea.innerHTML += `<div class="pdf-model-text">Model No.: ${modelNo}</div>`;
+        
+        // 抓取網頁上辨識完的數值
+        const v_hs = document.getElementById(`out_hs_${i}`).value || '-';
+        const v_ls = document.getElementById(`out_ls_${i}`).value || '-';
+        const v_th4 = document.getElementById(`out_th4_${i}`).value || '-';
+        const v_freq = document.getElementById(`out_freq_${i}`).value || '-';
+
+        let outHtml = `
+        <table class="pdf-table">
+            <thead>
+                <tr>
+                    <th style="width:25%">Refrigerant High Pressure (MPa)</th>
+                    <th style="width:25%">Refrigerant Low Pressure (MPa)</th>
+                    <th style="width:25%">Discharge Temperature ℃</th>
+                    <th style="width:25%">Compressor Operating Frequency (Hz)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>${v_hs}</td><td>${v_ls}</td><td>${v_th4}</td><td>${v_freq}</td></tr>
+            </tbody>
+        </table>`;
+        pdfArea.innerHTML += outHtml;
+    }
+
+    // --- Section B: Indoor ---
+    pdfArea.innerHTML += `<div class="pdf-section-title" style="page-break-before: auto;">B. Service Report - Indoor Unit</div>`;
+    let inBody = '';
+    cumulativeIndoorData.forEach(row => {
+        inBody += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td>${row[4]}</td><td>${row[5]}</td></tr>`;
+    });
+    pdfArea.innerHTML += `
+    <table class="pdf-table">
+        <thead>
+        <tr>
+            <th style="width:10%">ID No.</th>
+            <th style="width:18%">Cooling Capacity (kW)</th>
+            <th style="width:18%">Cooling Air Supply Temperature ℃</th>
+            <th style="width:18%">Cooling Air Return Temperature ℃</th>
+            <th style="width:18%">AC Mode</th>
+            <th style="width:18%">Status</th>
+        </tr>
+        </thead>
+        <tbody>${inBody}</tbody>
+    </table>`;
+
+    const opt = {
+      margin: [78, 10, 15, 10], 
+      filename: 'REC_Service_Report.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 3, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(pdfArea).toPdf().get('pdf').then(function (pdf) {
+        var totalPages = pdf.internal.getNumberOfPages();
+        var companySelect = document.getElementById('companySelect').value;
+        var companyText = (companySelect === 'RCL') 
+            ? 'REC Engineering Contracting Company Limited' 
+            : 'REC Engineering Company Limited';
+            
+        var type = document.getElementById('pTitleType').value;
+        var finalTitle = (type === 'Other') ? document.getElementById('pTitleOther').value : type;
+        var pName = document.getElementById('pName').value;
+        var pLoc = document.getElementById('pLoc').value;
+        var pTime = document.getElementById('pTime').value;
+
+        for (var i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFont("times", "bold");
+
+            pdf.setFontSize(14);
+            pdf.text(companyText, 10, 24);
+
+            pdf.setFontSize(19);
+            pdf.text(finalTitle, 105, 41, { align: 'center' });
+            var textWidth = pdf.getStringUnitWidth(finalTitle) * 19 / pdf.internal.scaleFactor;
+            pdf.setLineWidth(0.5);
+            pdf.line(105 - textWidth/2, 42.5, 105 + textWidth/2, 42.5);
+
+            pdf.setFontSize(9);
+            pdf.text('Project Name : ' + pName, 10, 55);
+            pdf.text('Location : ' + pLoc, 10, 63);
+            pdf.text('Inspection Period : ' + pTime, 10, 71);
+
+            pdf.setFontSize(7.5);
+            pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
+        }
+    }).save();
+  };
+</script>
+</body>
+</html>
