@@ -30,17 +30,23 @@
         left: -9999px; 
         top: 0;
     } 
-    #pdfContentArea { width: 190mm; background: white; color: black; }
+    /* 修正寬度為 188mm 預留緩衝，確保右側框線 100% 顯示 */
+    #pdfContentArea { width: 188mm; background: white; color: black; margin: 0 auto; box-sizing: border-box; }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
     .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0.8cm; }
     .pdf-table tr { page-break-inside: avoid; }
+    
+    /* 框線設為最幼 (0.5pt)，並強制文字換行 */
     .pdf-table th, .pdf-table td { 
-        border: 1px solid black !important; 
+        border: 0.5pt solid #000 !important; 
         padding: 0.15cm 1px; 
-        font-size: 7.5pt; text-align: center; vertical-align: middle; word-wrap: break-word; 
+        font-size: 7.5pt; text-align: center; vertical-align: middle; 
+        word-wrap: break-word; 
+        overflow-wrap: break-word; 
+        white-space: normal; 
     }
     .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.2; }
   </style>
@@ -80,24 +86,22 @@
       </select>
     </div>
     <div class="field" id="modelInputsContainer" style="display:flex; flex-direction:row; gap:10px;">
-      </div>
+    </div>
   </div>
   
   <div class="controls">
     <input type="file" id="imgOutdoor" accept="image/*">
     <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor Data</button>
-    <span id="msgOutdoor" style="font-size:12px; color:#666;">支援動態字眼搜尋 (63HS, 63LS, TH4, F/Hz)</span>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">若OCR有漏抓，可直接在下方表格手動輸入修正</span>
   </div>
   
-  <div id="outdoorTablesContainer">
-    </div>
-
+  <div id="outdoorTablesContainer"></div>
 
   <div class="section-title">B. Service Report - Indoor Unit</div>
   <div class="controls">
     <input type="file" id="imgIndoor" accept="image/*">
     <button class="btn-ocr" id="runIndoorOcr">Extract & Add Indoor Data</button>
-    <span id="msgIndoor" style="font-size:12px; color:#666;">支援累積上傳與自動排序</span>
+    <span id="msgIndoor" style="font-size:12px; color:#666;">支援累積上傳與自動排序 (可隨時手動修改數值)</span>
   </div>
   
   <table>
@@ -121,7 +125,6 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-// 確保整個網頁載入完成後才執行程式碼
 window.onload = function() {
 
   window.toggleOtherTitle = function() {
@@ -129,7 +132,7 @@ window.onload = function() {
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
   }
 
-  // 安全的正則表達式萃取函數
+  // 安全正則表達式，容錯率更高
   function getSafeMatches(text, regex) {
       let matches = [];
       let match;
@@ -150,7 +153,6 @@ window.onload = function() {
     tableContainer.innerHTML = '';
 
     for(let i=1; i<=qty; i++) {
-        // Model No 保持純手動輸入
         container.innerHTML += `<div style="display:flex; flex-direction:column; width: 100%;">
             <label style="font-size:12px;">Model No. (機組 ${i})</label>
             <input type="text" id="outModel_${i}" placeholder="請手動輸入機號...">
@@ -180,7 +182,7 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
-  // 室外機 OCR 邏輯 (純抓數據，不碰 Model No)
+  // 室外機強化版 OCR
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
         const file = document.getElementById('imgOutdoor').files[0];
@@ -189,10 +191,11 @@ window.onload = function() {
         
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
         
-        const hsMatches = getSafeMatches(text, /63HS\s*=?\s*([\d.]+)/gi);
-        const lsMatches = getSafeMatches(text, /63LS\s*=?\s*([\d.]+)/gi);
-        const th4Matches = getSafeMatches(text, /TH4\s*=?\s*([\d.]+)/gi);
-        const freqMatches = getSafeMatches(text, /(?:F\/Hz|FOS\(Hz\)|FOC\(Hz\))\s*=?\s*([\d.]+)/gi);
+        // 強化 Regex: 容忍更多空格與不同的符號
+        const hsMatches = getSafeMatches(text, /63HS\s*[=:]?\s*([\d.]+)/gi);
+        const lsMatches = getSafeMatches(text, /63LS\s*[=:]?\s*([\d.]+)/gi);
+        const th4Matches = getSafeMatches(text, /TH4\s*[=:]?\s*([\d.]+)/gi);
+        const freqMatches = getSafeMatches(text, /(?:F\/Hz|FOS\(Hz\)|FOC\(Hz\)|Hz)\s*[=:]?\s*([\d.]+)/gi);
 
         const qty = parseInt(document.getElementById('outQty').value);
         
@@ -203,7 +206,7 @@ window.onload = function() {
             if(document.getElementById(`out_th4_${i}`)) document.getElementById(`out_th4_${i}`).value = th4Matches[index] || '';
             if(document.getElementById(`out_freq_${i}`)) document.getElementById(`out_freq_${i}`).value = freqMatches[index] || '';
         }
-        document.getElementById('msgOutdoor').innerText = "辨識完成！資料已自動填入表格。";
+        document.getElementById('msgOutdoor').innerText = "辨識完成！如有遺漏請直接在表格內手動輸入修正。";
     } catch (err) {
         alert("OCR發生錯誤: " + err.message);
         document.getElementById('msgOutdoor').innerText = "辨識失敗。";
@@ -274,11 +277,14 @@ window.onload = function() {
         lines.forEach(line => {
           const p = line.split(/\s+/).filter(x => x.length > 0);
           if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-            cumulativeIndoorData.push([p[0], p[1].replace(',',''), smartFix(p[4]), smartFix(p[6]), "Cooling", "Cool ON"]);
+            // 已修正順序：[0]ID, [1]Capacity, p[6]為TH3(Supply), p[4]為TH1(Return)
+            let th3 = p.length > 6 ? smartFix(p[6]) : '';
+            let th1 = p.length > 4 ? smartFix(p[4]) : '';
+            cumulativeIndoorData.push([p[0], p[1].replace(',',''), th3, th1, "Cooling", "Cool ON"]);
           }
         });
         renderIndoorTable();
-        document.getElementById('msgIndoor').innerText = "辨識完成，已加入表格並排序！";
+        document.getElementById('msgIndoor').innerText = "辨識完成！若有漏抓的 ID (如 007) 請直接在表格最下方自行輸入補齊。";
     } catch (err) {
         alert("OCR發生錯誤: " + err.message);
         document.getElementById('msgIndoor').innerText = "辨識失敗。";
@@ -287,7 +293,7 @@ window.onload = function() {
 
 
   // ==========================================
-  // 3. 生成 PDF
+  // 3. 生成 PDF (強化細線與寬度適應)
   // ==========================================
   document.getElementById('genPdf').onclick = async () => {
     try {
@@ -362,11 +368,12 @@ window.onload = function() {
 
         pdfArea.innerHTML = htmlContent;
 
+        // scale 提高到 4 以確保 0.5pt 最細線條清晰不被截斷
         const opt = {
-          margin: [78, 10, 15, 10], 
+          margin: [78, 11, 15, 11], // 左右留白 11mm，完美置中 188mm 寬度表格
           filename: 'REC_Service_Report.pdf',
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 3, useCORS: true, scrollY: 0 },
+          image: { type: 'jpeg', quality: 1.0 },
+          html2canvas: { scale: 4, useCORS: true, scrollY: 0 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
@@ -390,15 +397,15 @@ window.onload = function() {
                 pdf.setFont("times", "bold");
 
                 pdf.setFontSize(14);
-                pdf.text(companyText, 10, 24);
+                pdf.text(companyText, 11, 24); // 配合 margin 微調起始點
 
                 pdf.setFontSize(19);
                 pdf.text(finalTitle, 105, 41, { align: 'center' });
 
                 pdf.setFontSize(9);
-                pdf.text('Project Name : ' + pName, 10, 55);
-                pdf.text('Location : ' + pLoc, 10, 63);
-                pdf.text('Inspection Period : ' + pTime, 10, 71);
+                pdf.text('Project Name : ' + pName, 11, 55);
+                pdf.text('Location : ' + pLoc, 11, 63);
+                pdf.text('Inspection Period : ' + pTime, 11, 71);
 
                 pdf.setFontSize(7.5);
                 pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
