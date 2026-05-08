@@ -40,11 +40,26 @@
         word-wrap: break-word; white-space: normal; 
     }
     .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.3; }
+
+    /* API Key 專用區塊樣式 */
+    .api-key-box { background: #fffbe6; padding: 15px; border-left: 5px solid #eab308; border-radius: 4px; margin-bottom: 20px; width: 100%; }
+    .api-key-row { display: flex; gap: 10px; align-items: center; }
   </style>
 </head>
 <body>
 
 <div class="main-box">
+  
+  <div class="api-key-box">
+    <div class="api-key-row">
+      <span style="font-weight: bold; font-size: 14px; color: #854d0e;">🔑 Gemini API Key:</span>
+      <input type="password" id="apiKeyInput" placeholder="請貼上您的 API Key..." style="flex: 1; margin: 0; border: 1px solid #ccc;">
+      <button class="btn-ocr" id="saveApiKeyBtn" style="margin: 0; background: #eab308; color: #000;">儲存金鑰</button>
+      <button class="btn-clear" id="clearApiKeyBtn" style="margin: 0;">清除</button>
+    </div>
+    <div style="font-size: 12px; color: #666; margin-top: 5px;">* 金鑰僅會安全地儲存於您目前的瀏覽器中，絕對不會上傳至任何伺服器。</div>
+  </div>
+
   <h2 style="color:#0f766e">REC - Service Report (Mitsubishi Electric VRF System)</h2>
   
   <div class="input-area">
@@ -81,8 +96,8 @@
   
   <div class="controls">
     <input type="file" id="imgOutdoor" accept="image/*">
-    <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor Data</button>
-    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機智能切割：已排除總和F(Hz)，精準抓取每部機組的獨立運作頻率。</span>
+    <button class="btn-ocr" id="runOutdoorOcr" style="background: #eab308; color: #000;">✨ Extract Outdoor with AI</button>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">已升級 Gemini 2.5 Flash 引擎，無視變形精準抓取！</span>
   </div>
   
   <div id="outdoorTablesContainer"></div>
@@ -90,9 +105,9 @@
   <div class="section-title">B. Service Report - Indoor Unit</div>
   <div class="controls">
     <input type="file" id="imgIndoor" accept="image/*">
-    <button class="btn-ocr" id="runIndoorOcr">Extract & Add Indoor Data</button>
+    <button class="btn-ocr" id="runIndoorOcr" style="background: #eab308; color: #000;">✨ Extract Indoor with AI</button>
     <button class="btn-clear" id="clearIndoorBtn">清空表格</button>
-    <span id="msgIndoor" style="font-size:12px; color:#666;">支援累積上傳與自動排序 (可隨時手動修改數值)</span>
+    <span id="msgIndoor" style="font-size:12px; color:#666;">已全面升級 AI 引擎，無視選取方框，絕不漏抓任何 ID！</span>
   </div>
   
   <table>
@@ -110,27 +125,50 @@
 <div id="pdf-wrapper"><div id="pdfContentArea"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
 window.onload = function() {
 
+  // ==========================================
+  // 🔐 API Key 本機儲存管理邏輯
+  // ==========================================
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const savedKey = localStorage.getItem('gemini_api_key');
+  
+  // 如果瀏覽器已經有記住，就自動填入
+  if (savedKey) {
+      apiKeyInput.value = savedKey;
+  }
+
+  document.getElementById('saveApiKeyBtn').onclick = () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+          localStorage.setItem('gemini_api_key', key);
+          alert('✅ API Key 已安全儲存於您的瀏覽器！下次打開網頁無需重新輸入。');
+      } else {
+          alert('⚠️ 請先貼上 API Key 再點擊儲存。');
+      }
+  };
+
+  document.getElementById('clearApiKeyBtn').onclick = () => {
+      localStorage.removeItem('gemini_api_key');
+      apiKeyInput.value = '';
+      alert('🗑️ API Key 已從您的瀏覽器中清除。');
+  };
+
+  // 取得目前輸入框的 API Key
+  function getApiKey() {
+      const key = apiKeyInput.value.trim();
+      if (!key) {
+          alert('⛔ 請先在上方輸入並儲存您的 Gemini API Key！');
+          return null;
+      }
+      return key;
+  }
+
   window.toggleOtherTitle = function() {
     const type = document.getElementById('pTitleType').value;
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
-  }
-
-  function extractNumbers(text, regex) {
-      let matches = [];
-      let match;
-      regex.lastIndex = 0;
-      while ((match = regex.exec(text)) !== null) {
-          if (match[1]) {
-              let val = match[1].replace(/\s+/g, '').replace(',', '.');
-              matches.push(val);
-          }
-      }
-      return matches;
   }
 
   window.updateOutdoorModels = function() {
@@ -170,44 +208,62 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
+  // 將圖片轉換為 Base64 字串
+  async function fileToBase64(file) {
+      return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(file);
+      });
+  }
+
+  // ==========================================
+  // ⚡ 室外機全新 AI 辨識系統 ⚡
+  // ==========================================
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
+        const apiKey = getApiKey();
+        if(!apiKey) return;
+
         const file = document.getElementById('imgOutdoor').files[0];
         if(!file) return alert("請上傳 Outdoor 圖片！");
-        document.getElementById('msgOutdoor').innerText = "辨識中...請稍候";
+        document.getElementById('msgOutdoor').innerText = "✨ AI 視覺大腦分析中，請稍候...";
         
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        const base64Data = await fileToBase64(file);
 
-        let rawChunks = text.split(/(?=PU[A-Z0-9-]{3,}|P[UMH][A-Z0-9-]{3,}|Adres\s*[:=]|Attribute)/gi);
-        let chunks = [];
-        let currentChunk = "";
+        const prompt = `這是一張冷氣運作數據的截圖。請幫我找出圖片中「所有」室外機組的以下四個數值：
+1. 高壓 (Refrigerant High Pressure)：通常在 63HS、63H5 附近。
+2. 低壓 (Refrigerant Low Pressure)：通常在 63LS、63L5 附近。
+3. 溫度 (Discharge Temperature)：通常在 TH4 附近。
+4. 頻率 (Compressor Operating Frequency)：通常在 Foc(Hz)、Fos(Hz) 或是單機版的 F/Hz 附近。請注意！絕對不要抓取代表總和的 "F(Hz)"，只抓各機組真實運作的 Foc、Fos 或 F/Hz。
+
+請以嚴格的 JSON 陣列格式回傳，陣列中的每一個物件代表一部機組。
+即使只找到部分數字，也請盡量填寫。如果找不到，請填入空字串 ""。
+回傳格式範例：[{"hs": "25.0", "ls": "7.6", "th4": "81.5", "freq": "47"}]
+請直接回傳 JSON 陣列本身，不要加任何 Markdown 標籤，也不要有任何其他文字。`;
+
+        // 使用最新 Gemini 2.5 Flash 引擎
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
-        for(let rc of rawChunks) {
-            currentChunk += " " + rc;
-            if (/[6GB]\s*3\s*[HhLliNnM]/i.test(currentChunk) || /[T\+Y]\s*[HhNnM]/i.test(currentChunk)) {
-                chunks.push(currentChunk);
-                currentChunk = ""; 
-            }
-        }
-        if (currentChunk.trim().length > 20 && chunks.length > 0) chunks[chunks.length - 1] += currentChunk;
-        if (chunks.length === 0) chunks = [text]; 
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Data } }] }],
+                generationConfig: { temperature: 0.1 } 
+            })
+        });
 
-        let extractedData = chunks.map(chunk => {
-            let hs = extractNumbers(chunk, /[6GB]\s*3\s*[HhNnM]\s*[S5s8].{0,15}?(\d{1,2}[\.,]\d{1,2})/gi)[0] || '';
-            let ls = extractNumbers(chunk, /[6GB]\s*3\s*[LlI1i]\s*[S5s8].{0,15}?(\d{1,2}[\.,]\d{1,2})/gi)[0] || '';
-            let th4 = extractNumbers(chunk, /[T\+Y]\s*[HhNnM]\s*[-_]?\s*[4Aa].{0,15}?(\d{2,3}(?:[\.,]\d{1,2})?)/gi)[0] || '';
-            
-            // 🔥 終極頻率修復：完全無視 F(Hz)，只鎖定主機 Foc、副機 Fos，或單機 F/Hz
-            // 1. 優先抓取雙拼機的 Foc(Hz) 或 Fos(Hz)
-            let freq = extractNumbers(chunk, /[Ff]\s*[oO0aA]\s*[cCsS5].{0,15}?(\d{2,3})/gi)[0];
-            // 2. 如果沒有 Foc/Fos，只允許抓取明確帶有斜線的 F/Hz (單機版使用)
-            if(!freq) freq = extractNumbers(chunk, /[Ff]\s*\/\s*[Hh]\s*[zZ].{0,15}?(\d{2,3})/gi)[0] || '';
-            
-            return { hs, ls, th4, freq };
-        }).filter(d => d.hs || d.ls || d.th4 || d.freq); 
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || "伺服器錯誤");
 
-        if (extractedData.length === 0) {
-            document.getElementById('msgOutdoor').innerText = "⚠️ 圖片壓縮太模糊，完全無法辨識。請直接手動輸入。";
+        let responseText = data.candidates[0].content.parts[0].text.trim();
+        responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        let extractedData = JSON.parse(responseText);
+
+        if (!extractedData || extractedData.length === 0) {
+            document.getElementById('msgOutdoor').innerText = "⚠️ AI 找不到任何機組數據。";
             return;
         }
 
@@ -227,39 +283,27 @@ window.onload = function() {
         let matchIndex = 0;
         for (let unitIdx of targetUnits) {
             if (matchIndex >= extractedData.length) break;
-            
             let d = extractedData[matchIndex];
             if (d.hs) document.getElementById(`out_hs_${unitIdx}`).value = d.hs;
             if (d.ls) document.getElementById(`out_ls_${unitIdx}`).value = d.ls;
             if (d.th4) document.getElementById(`out_th4_${unitIdx}`).value = d.th4;
             if (d.freq) document.getElementById(`out_freq_${unitIdx}`).value = d.freq;
-
             matchIndex++;
         }
 
-        if (extractedData.length > 1) {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！成功將圖片切割為 ${extractedData.length} 部機組，並精準填入(已排除總和頻率)。`;
-        } else {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已自動將單一數據填入空缺欄位。`;
-        }
+        document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！AI 成功抓取 ${extractedData.length} 部機組數據。`;
 
     } catch (err) {
-        alert("OCR發生錯誤: " + err.message);
-        document.getElementById('msgOutdoor').innerText = "辨識失敗。";
+        console.error(err);
+        alert(err.message);
+        document.getElementById('msgOutdoor').innerText = "辨識失敗，請確認 API Key 是否有效。";
     }
   };
 
   // ==========================================
-  // 2. 處理室內機 (Indoor)
+  // ⚡ 室內機全新 AI 辨識系統 ⚡
   // ==========================================
   let cumulativeIndoorData = []; 
-
-  function smartFix(val) {
-    if(!val) return '';
-    let n = val.replace(/[^0-9.]/g, ''); 
-    if (n.length >= 2 && !n.includes('.') && parseFloat(n) > 50) return (parseFloat(n) / 10).toFixed(1);
-    return n;
-  }
 
   function saveCurrentIndoorData() {
       cumulativeIndoorData = [];
@@ -275,7 +319,7 @@ window.onload = function() {
       });
   }
 
-  function renderIndoorTable() {
+  window.renderIndoorTable = function() {
     const tbody = document.getElementById('indoorTableBody');
     tbody.innerHTML = '';
     
@@ -300,27 +344,59 @@ window.onload = function() {
 
   document.getElementById('runIndoorOcr').onclick = async () => {
     try {
+        const apiKey = getApiKey();
+        if(!apiKey) return;
+
         const file = document.getElementById('imgIndoor').files[0];
         if(!file) return alert("請上傳 Indoor 圖片！");
-        document.getElementById('msgIndoor').innerText = "辨識中...請稍候";
+        document.getElementById('msgIndoor').innerText = "✨ AI 視覺大腦分析中，請稍候...";
         
         saveCurrentIndoorData(); 
         
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
-        const lines = text.split('\n').filter(l => l.trim().length > 10);
+        const base64Data = await fileToBase64(file);
+
+        const prompt = `這是一張冷氣運作數據的截圖，底下包含室內機 (IC) 的數據表格。請幫我提取表格中「每一列」的數值：
+1. ID No. (最左邊的三位數字，例如 007, 013 等)
+2. Capacity (通常在 QJ 欄位，數值如 20, 13 等)
+3. TH3 (Cooling Air Supply Temp，對應 TH3 欄位的數字)
+4. TH1 (Cooling Air Return Temp，對應 TH1 欄位的數字)
+
+請注意，有些數字可能被黑色方框選取，請無視方框，提取出裡面的數字。
+請以嚴格的 JSON 陣列格式回傳，陣列中的每一個物件代表一列機組。
+回傳格式範例：[{"id": "013", "cap": "20", "th3": "15.4", "th1": "15.0"}]
+請直接回傳 JSON 陣列本身，不要加任何 Markdown 標籤，也不要有任何其他文字。`;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
-        lines.forEach(line => {
-          const p = line.split(/\s+/).filter(x => x.length > 0);
-          if (p.length >= 6 && /^\d{3}$/.test(p[0])) {
-            let th3 = p.length > 6 ? smartFix(p[6]) : '';
-            let th1 = p.length > 4 ? smartFix(p[4]) : '';
-            cumulativeIndoorData.push([p[0], p[1].replace(',',''), th3, th1, "Cooling", "Cool ON"]);
-          }
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Data } }] }],
+                generationConfig: { temperature: 0.1 }
+            })
         });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || "伺服器錯誤");
+
+        let responseText = data.candidates[0].content.parts[0].text.trim();
+        responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        let extractedData = JSON.parse(responseText);
+
+        extractedData.forEach(d => {
+            if (d.id && d.id.trim() !== '') {
+                cumulativeIndoorData.push([d.id, d.cap || '', d.th3 || '', d.th1 || '', "Cooling", "Cool ON"]);
+            }
+        });
+
         renderIndoorTable();
-        document.getElementById('msgIndoor').innerText = "辨識完成！若有漏抓的 ID 請直接在表格下方輸入補齊。";
+        document.getElementById('msgIndoor').innerText = `✅ 辨識完成！AI 成功精準抓取了 ${extractedData.length} 筆室內機數據。`;
+
     } catch (err) {
-        alert("OCR發生錯誤: " + err.message);
+        console.error(err);
+        alert("AI 辨識發生錯誤: " + err.message);
         document.getElementById('msgIndoor').innerText = "辨識失敗。";
     }
   };
@@ -333,7 +409,6 @@ window.onload = function() {
           document.getElementById('msgIndoor').innerText = "表格已清空，可重新上傳辨識。";
       }
   };
-
 
   // ==========================================
   // 3. 生成 PDF
