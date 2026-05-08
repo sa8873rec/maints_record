@@ -31,31 +31,34 @@
         left: -9999px; 
         top: 0;
     } 
-    
-    /* 終極防裁切修復：寬度 188mm，但右側強制預留 2mm 空白緩衝 */
     #pdfContentArea { 
         width: 188mm; 
         background: white; 
         color: black; 
         margin: 0 auto; 
         box-sizing: border-box; 
-        padding-right: 2mm; 
     }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    /* 表格設定：強制加入最外層邊框以對抗 collapse bug */
+    /* 終極破解法：放棄 collapse，改用 separate 手工拼裝邊框 */
     .pdf-table { 
         width: 100%; 
-        border-collapse: collapse; 
+        border-collapse: separate; 
+        border-spacing: 0; 
         table-layout: fixed; 
         margin-bottom: 0.8cm; 
-        border: 0.5pt solid #000 !important; 
+        border-top: 0.5pt solid #000 !important; 
+        border-left: 0.5pt solid #000 !important; 
     }
     .pdf-table tr { page-break-inside: avoid; }
     .pdf-table th, .pdf-table td { 
-        border: 0.5pt solid #000 !important; 
+        /* 每個儲存格只畫右邊與下邊，完美組合出表格，絕不被裁切 */
+        border-right: 0.5pt solid #000 !important; 
+        border-bottom: 0.5pt solid #000 !important; 
+        border-top: none !important; 
+        border-left: none !important; 
         padding: 0.15cm 1px; 
         font-size: 7.5pt; text-align: center; vertical-align: middle; 
         word-wrap: break-word; 
@@ -297,7 +300,7 @@ window.onload = function() {
           }
         });
         renderIndoorTable();
-        document.getElementById('msgIndoor').innerText = "辨識完成！若有漏抓的 ID (如 007) 請直接在表格最下方自行輸入補齊。";
+        document.getElementById('msgIndoor').innerText = "辨識完成！若有漏抓的 ID 請直接在表格下方輸入補齊。";
     } catch (err) {
         alert("OCR發生錯誤: " + err.message);
         document.getElementById('msgIndoor').innerText = "辨識失敗。";
@@ -390,7 +393,6 @@ window.onload = function() {
 
         pdfArea.innerHTML = htmlContent;
 
-        // 設定：左邊留白 11mm，確保整體寬度為 210mm (11+188+11)，完美置中
         const opt = {
           margin: [78, 11, 15, 11], 
           filename: 'REC_Service_Report.pdf',
@@ -418,7 +420,6 @@ window.onload = function() {
                 pdf.setTextColor(0, 0, 0);
                 pdf.setFont("times", "bold");
 
-                // 文字對齊座標設為 11，與邊界完美切齊
                 pdf.setFontSize(14);
                 pdf.text(companyText, 11, 24); 
 
