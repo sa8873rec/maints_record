@@ -25,38 +25,19 @@
     th { background: #f8f9fa; font-size: 12px; }
     td input { width: 100%; border: none; text-align: center; font-size: 14px; background: #fffbe6; }
 
-    /* PDF 渲染層 */
-    #pdf-wrapper { 
-        position: absolute; 
-        left: -9999px; 
-        top: 0;
-    } 
-    /* 完美 188mm 寬度對應 A4 左右 11mm 的 margin，加入 padding 防裁切 */
-    #pdfContentArea { 
-        width: 188mm; 
-        background: white; 
-        color: black; 
-        margin: 0 auto; 
-        box-sizing: border-box; 
-        padding: 0 2mm; 
-    }
+    #pdf-wrapper { position: absolute; left: -9999px; top: 0; } 
+    #pdfContentArea { width: 188mm; background: white; color: black; margin: 0 auto; box-sizing: border-box; padding: 0 2mm; }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    .pdf-table { 
-        width: 100%; 
-        border-collapse: collapse; 
-        table-layout: fixed; 
-        margin-bottom: 0.8cm; 
-    }
+    .pdf-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 0.8cm; }
     .pdf-table tr { page-break-inside: avoid; }
     .pdf-table th, .pdf-table td { 
         border: 0.5pt solid #000 !important; 
         padding: 0.15cm 1px; 
         font-size: 7.5pt; text-align: center; vertical-align: middle; 
-        word-wrap: break-word; 
-        white-space: normal; 
+        word-wrap: break-word; white-space: normal; 
     }
     .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.3; }
   </style>
@@ -86,7 +67,6 @@
     </div>
   </div>
 
-  <!-- A. Outdoor Unit Section -->
   <div class="section-title">A. Service Report - Outdoor Unit</div>
   <div class="input-area" style="grid-template-columns: 1fr 4fr;">
     <div class="field">Outdoor Unit Qty
@@ -96,19 +76,17 @@
         <option value="3">3 部 (三拼機)</option>
       </select>
     </div>
-    <div class="field" id="modelInputsContainer" style="display:flex; flex-direction:row; gap:10px;">
-    </div>
+    <div class="field" id="modelInputsContainer" style="display:flex; flex-direction:row; gap:10px;"></div>
   </div>
   
   <div class="controls">
     <input type="file" id="imgOutdoor" accept="image/*">
     <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor Data</button>
-    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機全局掃描：無論截圖包含幾部機組，系統皆會自動抓取並依序填滿空位。</span>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機智能切割：自動將圖片切為上下區塊，完美解決第二部遺漏問題。</span>
   </div>
   
   <div id="outdoorTablesContainer"></div>
 
-  <!-- B. Indoor Unit Section -->
   <div class="section-title">B. Service Report - Indoor Unit</div>
   <div class="controls">
     <input type="file" id="imgIndoor" accept="image/*">
@@ -127,12 +105,9 @@
   </table>
 
   <button class="btn-pdf" id="genPdf">⬇ Generate & Download Final PDF</button>
-
 </div>
 
-<div id="pdf-wrapper">
-  <div id="pdfContentArea"></div>
-</div>
+<div id="pdf-wrapper"><div id="pdfContentArea"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -145,23 +120,20 @@ window.onload = function() {
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
   }
 
-  // 極限容錯的陣列萃取函數：自動修復小數點被拆開的問題 (如 24 . 7)
-  function getSafeMatches(text, regex) {
+  // 專門提煉數字並過濾雜訊的函數
+  function extractNumbers(text, regex) {
       let matches = [];
       let match;
       regex.lastIndex = 0;
       while ((match = regex.exec(text)) !== null) {
           if (match[1]) {
-              let val = match[1].replace(/\s+/g, ''); // 移除數字中所有多餘空白
-              if (val !== '') matches.push(val);
+              let val = match[1].replace(/\s+/g, '').replace(',', '.');
+              matches.push(val);
           }
       }
       return matches;
   }
 
-  // ==========================================
-  // 1. 動態處理室外機 (Outdoor)
-  // ==========================================
   window.updateOutdoorModels = function() {
     const qty = parseInt(document.getElementById('outQty').value);
     const container = document.getElementById('modelInputsContainer');
@@ -199,7 +171,7 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
-  // 室外機 OCR (全新全局掃描引擎)
+  // 室外機 OCR (全新區塊切割與極限容錯)
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
         const file = document.getElementById('imgOutdoor').files[0];
@@ -207,63 +179,77 @@ window.onload = function() {
         document.getElementById('msgOutdoor').innerText = "辨識中...請稍候";
         
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        console.log("OCR Text:", text); // F12 可查看原始文字
+
+        // 1. 智能切割 (Chunking): 找尋 PUHY / PUMY / Adres 關鍵字，將圖片文字切成獨立的機組區塊
+        let rawChunks = text.split(/(?=PU[A-Z0-9-]{3,}|P[UMH][A-Z0-9-]{3,}|Adres\s*[:=]|Attribute)/gi);
+        let chunks = [];
+        let currentChunk = "";
         
-        // 全局搜索：無視所有多餘空白、英文字母誤判，直接把整張圖片的所有數據抓成陣列
-        let hsMatches = getSafeMatches(text, /6\s*3\s*[Hh]\s*[S5s]\s*(?:1|I|l|\|)?\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
-        let lsMatches = getSafeMatches(text, /6\s*3\s*[Ll]\s*[S5s]\s*(?:1|I|l|\|)?\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
-        let th4Matches = getSafeMatches(text, /[T\+]\s*[Hh]\s*[-_]?\s*4\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
-        
-        // 頻率特別處理：優先尋找 Foc(Hz) 或 Fos(Hz)
-        let freqMatches = getSafeMatches(text, /F\s*[oO0]\s*[cCsS]\s*\(?\s*[Hh]\s*[zZ]\s*\)?\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
-        
-        // 如果找不到 Foc/Fos，退而求其次抓所有 F(Hz)
-        if(freqMatches.length === 0) {
-            freqMatches = getSafeMatches(text, /F\s*\(\s*[Hh]\s*[zZ]\s*\)\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
+        for(let rc of rawChunks) {
+            currentChunk += " " + rc;
+            // 當累積的文字中包含至少一組關鍵字 (如 63HS 或 TH4) 時，確認為一個獨立區塊
+            if (/[6GB]\s*3\s*[HhLliNnM]/i.test(currentChunk) || /[T\+Y]\s*[HhNnM]/i.test(currentChunk)) {
+                chunks.push(currentChunk);
+                currentChunk = ""; // 清空，準備裝下一部機組
+            }
         }
+        if (currentChunk.trim().length > 20 && chunks.length > 0) chunks[chunks.length - 1] += currentChunk;
+        if (chunks.length === 0) chunks = [text]; // 若切割失敗，退回整篇掃描
 
-        let matchCount = Math.max(hsMatches.length, lsMatches.length, th4Matches.length, freqMatches.length);
+        // 2. 針對每個切割好的區塊獨立進行 X 光極限掃描
+        let extractedData = chunks.map(chunk => {
+            // .{0,15}? 容忍 OCR 產生的大量雜訊空格
+            let hs = extractNumbers(chunk, /[6GB]\s*3\s*[HhNnM]\s*[S5s8].{0,15}?(\d{1,2}[\.,]\d{1,2})/gi)[0] || '';
+            let ls = extractNumbers(chunk, /[6GB]\s*3\s*[LlI1i]\s*[S5s8].{0,15}?(\d{1,2}[\.,]\d{1,2})/gi)[0] || '';
+            let th4 = extractNumbers(chunk, /[T\+Y]\s*[HhNnM]\s*[-_]?\s*[4Aa].{0,15}?(\d{2,3}(?:[\.,]\d{1,2})?)/gi)[0] || '';
+            
+            // 優先找 Foc 或 Fos，找不到再找 F(Hz)
+            let freq = extractNumbers(chunk, /[Ff]\s*[oO0aA]\s*[cCsS5].{0,15}?(\d{2,3})/gi)[0];
+            if(!freq) freq = extractNumbers(chunk, /[Ff]\s*\(\s*[Hh]\s*[zZ]\s*\).{0,15}?(\d{2,3})/gi)[0] || '';
+            
+            return { hs, ls, th4, freq };
+        }).filter(d => d.hs || d.ls || d.th4 || d.freq); // 過濾完全空的廢區塊
 
-        if (matchCount === 0) {
+        if (extractedData.length === 0) {
             document.getElementById('msgOutdoor').innerText = "⚠️ 圖片壓縮太模糊，完全無法辨識。請直接手動輸入。";
             return;
         }
 
+        // 3. 智能填補 (Smart Fill)
         const qty = parseInt(document.getElementById('outQty').value);
         let targetUnits = [];
         
-        // 智慧尋找：檢查目前網頁上哪些機組還是「空的」，優先填入空的機組
+        // 找出畫面上還是空的格子
         for (let i = 1; i <= qty; i++) {
             let hs = document.getElementById(`out_hs_${i}`).value;
             let ls = document.getElementById(`out_ls_${i}`).value;
             let th4 = document.getElementById(`out_th4_${i}`).value;
             let freq = document.getElementById(`out_freq_${i}`).value;
-            if (!hs && !ls && !th4 && !freq) {
-                targetUnits.push(i);
-            }
+            if (!hs && !ls && !th4 && !freq) targetUnits.push(i);
         }
 
-        // 如果全部都已經填滿了，但使用者又重新上傳，就從頭開始覆蓋
-        if (targetUnits.length === 0) {
-            targetUnits = Array.from({length: qty}, (_, i) => i + 1);
-        }
+        // 如果全部都滿了卻又上傳，就從頭覆蓋
+        if (targetUnits.length === 0) targetUnits = Array.from({length: qty}, (_, i) => i + 1);
 
-        // 依序將抓到的陣列資料，填入對應的空缺機組中
+        // 依序填入
         let matchIndex = 0;
         for (let unitIdx of targetUnits) {
-            if (matchIndex >= matchCount) break;
-
-            if (hsMatches[matchIndex]) document.getElementById(`out_hs_${unitIdx}`).value = hsMatches[matchIndex];
-            if (lsMatches[matchIndex]) document.getElementById(`out_ls_${unitIdx}`).value = lsMatches[matchIndex];
-            if (th4Matches[matchIndex]) document.getElementById(`out_th4_${unitIdx}`).value = th4Matches[matchIndex];
-            if (freqMatches[matchIndex]) document.getElementById(`out_freq_${unitIdx}`).value = freqMatches[matchIndex];
+            if (matchIndex >= extractedData.length) break;
+            
+            let d = extractedData[matchIndex];
+            if (d.hs) document.getElementById(`out_hs_${unitIdx}`).value = d.hs;
+            if (d.ls) document.getElementById(`out_ls_${unitIdx}`).value = d.ls;
+            if (d.th4) document.getElementById(`out_th4_${unitIdx}`).value = d.th4;
+            if (d.freq) document.getElementById(`out_freq_${unitIdx}`).value = d.freq;
 
             matchIndex++;
         }
 
-        if (matchCount > 1) {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！成功從圖片中抓取 ${matchCount} 組數據並依序填入。`;
+        if (extractedData.length > 1) {
+            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！成功將圖片切割為 ${extractedData.length} 部機組，並精準填滿。`;
         } else {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已自動將單一數據填入空缺欄位。`;
+            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已將單一部機組數據填入空缺欄位。`;
         }
 
     } catch (err) {
@@ -379,7 +365,6 @@ window.onload = function() {
             const v_th4 = document.getElementById(`out_th4_${i}`) ? document.getElementById(`out_th4_${i}`).value : '';
             const v_freq = document.getElementById(`out_freq_${i}`) ? document.getElementById(`out_freq_${i}`).value : '';
 
-            // 保留換行標籤 <br>，確保文字絕對不撐開邊框
             htmlContent += `
             <table class="pdf-table">
                 <thead>
@@ -463,7 +448,6 @@ window.onload = function() {
                 pdf.setTextColor(0, 0, 0);
                 pdf.setFont("times", "bold");
 
-                // 配合 2mm 的 padding 往右移至 13 確保完美對齊
                 pdf.setFontSize(14);
                 pdf.text(companyText, 13, 24); 
 
