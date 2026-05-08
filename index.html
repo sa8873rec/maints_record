@@ -31,6 +31,7 @@
         left: -9999px; 
         top: 0;
     } 
+    /* 完美 188mm 寬度對應 A4 左右 11mm 的 margin */
     #pdfContentArea { 
         width: 188mm; 
         background: white; 
@@ -42,30 +43,22 @@
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    /* 終極破解法：放棄 collapse，改用 separate 手工拼裝邊框 */
+    /* 退回最好看的原版邊框設計 */
     .pdf-table { 
         width: 100%; 
-        border-collapse: separate; 
-        border-spacing: 0; 
+        border-collapse: collapse; 
         table-layout: fixed; 
         margin-bottom: 0.8cm; 
-        border-top: 0.5pt solid #000 !important; 
-        border-left: 0.5pt solid #000 !important; 
     }
     .pdf-table tr { page-break-inside: avoid; }
     .pdf-table th, .pdf-table td { 
-        /* 每個儲存格只畫右邊與下邊，完美組合出表格，絕不被裁切 */
-        border-right: 0.5pt solid #000 !important; 
-        border-bottom: 0.5pt solid #000 !important; 
-        border-top: none !important; 
-        border-left: none !important; 
+        border: 0.5pt solid #000 !important; 
         padding: 0.15cm 1px; 
         font-size: 7.5pt; text-align: center; vertical-align: middle; 
         word-wrap: break-word; 
-        overflow-wrap: break-word; 
         white-space: normal; 
     }
-    .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.2; }
+    .pdf-table th { background: #ffffff !important; font-weight: bold; line-height: 1.3; }
   </style>
 </head>
 <body>
@@ -318,7 +311,7 @@ window.onload = function() {
 
 
   // ==========================================
-  // 3. 生成 PDF
+  // 3. 生成 PDF (終極換行修復)
   // ==========================================
   document.getElementById('genPdf').onclick = async () => {
     try {
@@ -337,14 +330,15 @@ window.onload = function() {
             const v_th4 = document.getElementById(`out_th4_${i}`) ? document.getElementById(`out_th4_${i}`).value : '';
             const v_freq = document.getElementById(`out_freq_${i}`) ? document.getElementById(`out_freq_${i}`).value : '';
 
+            // 關鍵修改：在 PDF 生成時，強制加入 <br> 標籤把字串切斷，確保不撐爆邊框
             htmlContent += `
             <table class="pdf-table">
                 <thead>
                     <tr>
-                        <th style="width:25%">Refrigerant High Pressure (MPa)</th>
-                        <th style="width:25%">Refrigerant Low Pressure (MPa)</th>
-                        <th style="width:25%">Discharge Temperature ℃</th>
-                        <th style="width:25%">Compressor Operating Frequency (Hz)</th>
+                        <th style="width:25%">Refrigerant High<br>Pressure (MPa)</th>
+                        <th style="width:25%">Refrigerant Low<br>Pressure (MPa)</th>
+                        <th style="width:25%">Discharge<br>Temperature ℃</th>
+                        <th style="width:25%">Compressor Operating<br>Frequency (Hz)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -376,14 +370,15 @@ window.onload = function() {
             inBody = `<tr><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
         }
 
+        // 同樣加上 <br> 強制換行以策安全
         htmlContent += `
         <table class="pdf-table">
             <thead>
             <tr>
                 <th style="width:10%">ID No.</th>
-                <th style="width:18%">Cooling Capacity (kW)</th>
-                <th style="width:18%">Cooling Air Supply Temperature ℃</th>
-                <th style="width:18%">Cooling Air Return Temperature ℃</th>
+                <th style="width:18%">Cooling<br>Capacity (kW)</th>
+                <th style="width:18%">Cooling Air Supply<br>Temperature ℃</th>
+                <th style="width:18%">Cooling Air Return<br>Temperature ℃</th>
                 <th style="width:18%">AC Mode</th>
                 <th style="width:18%">Status</th>
             </tr>
