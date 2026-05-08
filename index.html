@@ -31,21 +31,22 @@
         left: -9999px; 
         top: 0;
     } 
-    /* 完美 188mm 寬度對應 A4 左右 11mm 的 margin */
+    /* 關鍵修復：左右加入 2mm padding，強制將內部表格縮窄並遠離裁切邊緣 */
     #pdfContentArea { 
         width: 188mm; 
         background: white; 
         color: black; 
         margin: 0 auto; 
         box-sizing: border-box; 
+        padding: 0 2mm; 
     }
     
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    /* 退回最好看的原版邊框設計 */
+    /* 表格設定：維持原汁原味最好看的 collapse 邊框 */
     .pdf-table { 
-        width: 100%; 
+        width: 100%; /* 由於外層有了 2mm padding，實際寬度會縮小，不再觸碰邊界 */
         border-collapse: collapse; 
         table-layout: fixed; 
         margin-bottom: 0.8cm; 
@@ -311,7 +312,7 @@ window.onload = function() {
 
 
   // ==========================================
-  // 3. 生成 PDF (終極換行修復)
+  // 3. 生成 PDF
   // ==========================================
   document.getElementById('genPdf').onclick = async () => {
     try {
@@ -330,7 +331,7 @@ window.onload = function() {
             const v_th4 = document.getElementById(`out_th4_${i}`) ? document.getElementById(`out_th4_${i}`).value : '';
             const v_freq = document.getElementById(`out_freq_${i}`) ? document.getElementById(`out_freq_${i}`).value : '';
 
-            // 關鍵修改：在 PDF 生成時，強制加入 <br> 標籤把字串切斷，確保不撐爆邊框
+            // 保留換行確保安全
             htmlContent += `
             <table class="pdf-table">
                 <thead>
@@ -370,7 +371,6 @@ window.onload = function() {
             inBody = `<tr><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
         }
 
-        // 同樣加上 <br> 強制換行以策安全
         htmlContent += `
         <table class="pdf-table">
             <thead>
@@ -415,16 +415,17 @@ window.onload = function() {
                 pdf.setTextColor(0, 0, 0);
                 pdf.setFont("times", "bold");
 
+                // 座標配合 2mm 的 padding 同步往右移至 13，確保文字與內部縮窄的表格對齊
                 pdf.setFontSize(14);
-                pdf.text(companyText, 11, 24); 
+                pdf.text(companyText, 13, 24); 
 
                 pdf.setFontSize(19);
                 pdf.text(finalTitle, 105, 41, { align: 'center' });
 
                 pdf.setFontSize(9);
-                pdf.text('Project Name : ' + pName, 11, 55);
-                pdf.text('Location : ' + pLoc, 11, 63);
-                pdf.text('Inspection Period : ' + pTime, 11, 71);
+                pdf.text('Project Name : ' + pName, 13, 55);
+                pdf.text('Location : ' + pLoc, 13, 63);
+                pdf.text('Inspection Period : ' + pTime, 13, 71);
 
                 pdf.setFontSize(7.5);
                 pdf.text(i + ' of ' + totalPages, 105, 289, { align: 'center' });
