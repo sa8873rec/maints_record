@@ -82,7 +82,7 @@
   <div class="controls">
     <input type="file" id="imgOutdoor" accept="image/*">
     <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor Data</button>
-    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機智能切割：自動將圖片切為上下區塊，完美解決第二部遺漏問題。</span>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機智能切割：已排除總和F(Hz)，精準抓取每部機組的獨立運作頻率。</span>
   </div>
   
   <div id="outdoorTablesContainer"></div>
@@ -120,7 +120,6 @@ window.onload = function() {
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
   }
 
-  // 專門提煉數字並過濾雜訊的函數
   function extractNumbers(text, regex) {
       let matches = [];
       let match;
@@ -171,7 +170,6 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
-  // 室外機 OCR (全新區塊切割與極限容錯)
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
         const file = document.getElementById('imgOutdoor').files[0];
@@ -179,48 +177,43 @@ window.onload = function() {
         document.getElementById('msgOutdoor').innerText = "辨識中...請稍候";
         
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
-        console.log("OCR Text:", text); // F12 可查看原始文字
 
-        // 1. 智能切割 (Chunking): 找尋 PUHY / PUMY / Adres 關鍵字，將圖片文字切成獨立的機組區塊
         let rawChunks = text.split(/(?=PU[A-Z0-9-]{3,}|P[UMH][A-Z0-9-]{3,}|Adres\s*[:=]|Attribute)/gi);
         let chunks = [];
         let currentChunk = "";
         
         for(let rc of rawChunks) {
             currentChunk += " " + rc;
-            // 當累積的文字中包含至少一組關鍵字 (如 63HS 或 TH4) 時，確認為一個獨立區塊
             if (/[6GB]\s*3\s*[HhLliNnM]/i.test(currentChunk) || /[T\+Y]\s*[HhNnM]/i.test(currentChunk)) {
                 chunks.push(currentChunk);
-                currentChunk = ""; // 清空，準備裝下一部機組
+                currentChunk = ""; 
             }
         }
         if (currentChunk.trim().length > 20 && chunks.length > 0) chunks[chunks.length - 1] += currentChunk;
-        if (chunks.length === 0) chunks = [text]; // 若切割失敗，退回整篇掃描
+        if (chunks.length === 0) chunks = [text]; 
 
-        // 2. 針對每個切割好的區塊獨立進行 X 光極限掃描
         let extractedData = chunks.map(chunk => {
-            // .{0,15}? 容忍 OCR 產生的大量雜訊空格
             let hs = extractNumbers(chunk, /[6GB]\s*3\s*[HhNnM]\s*[S5s8].{0,15}?(\d{1,2}[\.,]\d{1,2})/gi)[0] || '';
             let ls = extractNumbers(chunk, /[6GB]\s*3\s*[LlI1i]\s*[S5s8].{0,15}?(\d{1,2}[\.,]\d{1,2})/gi)[0] || '';
             let th4 = extractNumbers(chunk, /[T\+Y]\s*[HhNnM]\s*[-_]?\s*[4Aa].{0,15}?(\d{2,3}(?:[\.,]\d{1,2})?)/gi)[0] || '';
             
-            // 優先找 Foc 或 Fos，找不到再找 F(Hz)
+            // 🔥 終極頻率修復：完全無視 F(Hz)，只鎖定主機 Foc、副機 Fos，或單機 F/Hz
+            // 1. 優先抓取雙拼機的 Foc(Hz) 或 Fos(Hz)
             let freq = extractNumbers(chunk, /[Ff]\s*[oO0aA]\s*[cCsS5].{0,15}?(\d{2,3})/gi)[0];
-            if(!freq) freq = extractNumbers(chunk, /[Ff]\s*\(\s*[Hh]\s*[zZ]\s*\).{0,15}?(\d{2,3})/gi)[0] || '';
+            // 2. 如果沒有 Foc/Fos，只允許抓取明確帶有斜線的 F/Hz (單機版使用)
+            if(!freq) freq = extractNumbers(chunk, /[Ff]\s*\/\s*[Hh]\s*[zZ].{0,15}?(\d{2,3})/gi)[0] || '';
             
             return { hs, ls, th4, freq };
-        }).filter(d => d.hs || d.ls || d.th4 || d.freq); // 過濾完全空的廢區塊
+        }).filter(d => d.hs || d.ls || d.th4 || d.freq); 
 
         if (extractedData.length === 0) {
             document.getElementById('msgOutdoor').innerText = "⚠️ 圖片壓縮太模糊，完全無法辨識。請直接手動輸入。";
             return;
         }
 
-        // 3. 智能填補 (Smart Fill)
         const qty = parseInt(document.getElementById('outQty').value);
         let targetUnits = [];
         
-        // 找出畫面上還是空的格子
         for (let i = 1; i <= qty; i++) {
             let hs = document.getElementById(`out_hs_${i}`).value;
             let ls = document.getElementById(`out_ls_${i}`).value;
@@ -229,10 +222,8 @@ window.onload = function() {
             if (!hs && !ls && !th4 && !freq) targetUnits.push(i);
         }
 
-        // 如果全部都滿了卻又上傳，就從頭覆蓋
         if (targetUnits.length === 0) targetUnits = Array.from({length: qty}, (_, i) => i + 1);
 
-        // 依序填入
         let matchIndex = 0;
         for (let unitIdx of targetUnits) {
             if (matchIndex >= extractedData.length) break;
@@ -247,9 +238,9 @@ window.onload = function() {
         }
 
         if (extractedData.length > 1) {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！成功將圖片切割為 ${extractedData.length} 部機組，並精準填滿。`;
+            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！成功將圖片切割為 ${extractedData.length} 部機組，並精準填入(已排除總和頻率)。`;
         } else {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已將單一部機組數據填入空缺欄位。`;
+            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已自動將單一數據填入空缺欄位。`;
         }
 
     } catch (err) {
@@ -257,7 +248,6 @@ window.onload = function() {
         document.getElementById('msgOutdoor').innerText = "辨識失敗。";
     }
   };
-
 
   // ==========================================
   // 2. 處理室內機 (Indoor)
@@ -353,7 +343,6 @@ window.onload = function() {
         const pdfArea = document.getElementById('pdfContentArea');
         let htmlContent = ''; 
 
-        // --- Section A: Outdoor ---
         htmlContent += `<div class="pdf-section-title">A. Service Report - Outdoor Unit</div>`;
         const qty = parseInt(document.getElementById('outQty').value);
         for(let i=1; i<=qty; i++) {
@@ -381,7 +370,6 @@ window.onload = function() {
             </table>`;
         }
 
-        // --- Section B: Indoor ---
         htmlContent += `<div class="pdf-section-title" style="page-break-before: auto;">B. Service Report - Indoor Unit</div>`;
         
         let inBody = '';
