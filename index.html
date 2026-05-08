@@ -31,7 +31,6 @@
         left: -9999px; 
         top: 0;
     } 
-    /* 關鍵修復：左右加入 2mm padding，強制將內部表格縮窄並遠離裁切邊緣 */
     #pdfContentArea { 
         width: 188mm; 
         background: white; 
@@ -44,9 +43,8 @@
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    /* 表格設定：維持原汁原味最好看的 collapse 邊框 */
     .pdf-table { 
-        width: 100%; /* 由於外層有了 2mm padding，實際寬度會縮小，不再觸碰邊界 */
+        width: 100%; 
         border-collapse: collapse; 
         table-layout: fixed; 
         margin-bottom: 0.8cm; 
@@ -104,7 +102,7 @@
   <div class="controls">
     <input type="file" id="imgOutdoor" accept="image/*">
     <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor Data</button>
-    <span id="msgOutdoor" style="font-size:12px; color:#666;">若OCR有漏抓，可直接在下方表格手動輸入修正</span>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">支援分開截圖上傳：上傳第一張辨識後，可直接選第二張再次辨識，系統會智能填補。</span>
   </div>
   
   <div id="outdoorTablesContainer"></div>
@@ -149,8 +147,11 @@ window.onload = function() {
   function getSafeMatches(text, regex) {
       let matches = [];
       let match;
+      regex.lastIndex = 0; // 重置狀態
       while ((match = regex.exec(text)) !== null) {
-          matches.push(match[1]);
+          if (match[1] && match[1].trim() !== '') {
+              matches.push(match[1]);
+          }
       }
       return matches;
   }
@@ -195,6 +196,7 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
+  // 室外機 OCR (導入防彈容錯與智能填補)
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
         const file = document.getElementById('imgOutdoor').files[0];
@@ -202,22 +204,59 @@ window.onload = function() {
         document.getElementById('msgOutdoor').innerText = "辨識中...請稍候";
         
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        console.log("OCR 原始辨識內容 (供除錯用): \n", text); // F12可查看原始抓取字元
         
-        const hsMatches = getSafeMatches(text, /63HS\s*[=:]?\s*([\d.]+)/gi);
-        const lsMatches = getSafeMatches(text, /63LS\s*[=:]?\s*([\d.]+)/gi);
-        const th4Matches = getSafeMatches(text, /TH4\s*[=:]?\s*([\d.]+)/gi);
-        const freqMatches = getSafeMatches(text, /(?:F\/Hz|FOS\(Hz\)|FOC\(Hz\)|Hz)\s*[=:]?\s*([\d.]+)/gi);
+        // 終極容錯Regex：無視多餘空白、等號、冒號，精準鎖定數字
+        const hsMatches = getSafeMatches(text, /63\s*H\s*[S5][^\d]{0,15}(\d+(?:\.\d+)?)/gi);
+        const lsMatches = getSafeMatches(text, /63\s*L\s*[S5][^\d]{0,15}(\d+(?:\.\d+)?)/gi);
+        const th4Matches = getSafeMatches(text, /TH\s*[-_]?\s*4[^\d]{0,15}(\d+(?:\.\d+)?)/gi);
+        const freqMatches = getSafeMatches(text, /(?:F\s*\/\s*H\s*z|FOS|FOC|H\s*z|Hz)[^\d]{0,15}(\d+(?:\.\d+)?)/gi);
 
         const qty = parseInt(document.getElementById('outQty').value);
-        
-        for(let i=1; i<=qty; i++) {
-            const index = i - 1;
-            if(document.getElementById(`out_hs_${i}`)) document.getElementById(`out_hs_${i}`).value = hsMatches[index] || '';
-            if(document.getElementById(`out_ls_${i}`)) document.getElementById(`out_ls_${i}`).value = lsMatches[index] || '';
-            if(document.getElementById(`out_th4_${i}`)) document.getElementById(`out_th4_${i}`).value = th4Matches[index] || '';
-            if(document.getElementById(`out_freq_${i}`)) document.getElementById(`out_freq_${i}`).value = freqMatches[index] || '';
+        let maxFound = Math.max(hsMatches.length, lsMatches.length, th4Matches.length, freqMatches.length);
+
+        if (maxFound > 1) {
+            // 情境 1：一張大截圖內包含兩台機組的資料
+            for(let i=1; i<=qty; i++) {
+                const index = i - 1;
+                // 有抓到才覆蓋，避免清空手動輸入的值
+                if(hsMatches[index]) document.getElementById(`out_hs_${i}`).value = hsMatches[index];
+                if(lsMatches[index]) document.getElementById(`out_ls_${i}`).value = lsMatches[index];
+                if(th4Matches[index]) document.getElementById(`out_th4_${i}`).value = th4Matches[index];
+                if(freqMatches[index]) document.getElementById(`out_freq_${i}`).value = freqMatches[index];
+            }
+            document.getElementById('msgOutdoor').innerText = "✅ 辨識完成！已成功抓取多組資料。";
+        } 
+        else if (maxFound === 1) {
+            // 情境 2：智慧尋找 (Smart Fill) - 找出第一個完全空白的機組並填入
+            let targetUnit = 1;
+            for(let i=1; i<=qty; i++) {
+                let hs = document.getElementById(`out_hs_${i}`).value;
+                let ls = document.getElementById(`out_ls_${i}`).value;
+                let th4 = document.getElementById(`out_th4_${i}`).value;
+                let freq = document.getElementById(`out_freq_${i}`).value;
+                
+                // 只要四格都是空的，就認定它是我們該填入的目標
+                if(!hs && !ls && !th4 && !freq) {
+                    targetUnit = i;
+                    break; 
+                }
+            }
+            
+            if(hsMatches[0]) document.getElementById(`out_hs_${targetUnit}`).value = hsMatches[0];
+            if(lsMatches[0]) document.getElementById(`out_ls_${targetUnit}`).value = lsMatches[0];
+            if(th4Matches[0]) document.getElementById(`out_th4_${targetUnit}`).value = th4Matches[0];
+            if(freqMatches[0]) document.getElementById(`out_freq_${targetUnit}`).value = freqMatches[0];
+            
+            if(qty > 1 && targetUnit < qty) {
+                document.getElementById('msgOutdoor').innerText = `✅ 已自動填入 Unit ${targetUnit}。請繼續上傳下一張截圖並再次點擊辨識！`;
+            } else {
+                document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！資料已填入 Unit ${targetUnit}。`;
+            }
+        } 
+        else {
+            document.getElementById('msgOutdoor').innerText = "⚠️ 圖片因壓縮太模糊或格式不符，完全無法辨識。請直接手動輸入。";
         }
-        document.getElementById('msgOutdoor').innerText = "辨識完成！如有遺漏請直接在表格內手動輸入修正。";
     } catch (err) {
         alert("OCR發生錯誤: " + err.message);
         document.getElementById('msgOutdoor').innerText = "辨識失敗。";
@@ -331,7 +370,6 @@ window.onload = function() {
             const v_th4 = document.getElementById(`out_th4_${i}`) ? document.getElementById(`out_th4_${i}`).value : '';
             const v_freq = document.getElementById(`out_freq_${i}`) ? document.getElementById(`out_freq_${i}`).value : '';
 
-            // 保留換行確保安全
             htmlContent += `
             <table class="pdf-table">
                 <thead>
@@ -415,7 +453,6 @@ window.onload = function() {
                 pdf.setTextColor(0, 0, 0);
                 pdf.setFont("times", "bold");
 
-                // 座標配合 2mm 的 padding 同步往右移至 13，確保文字與內部縮窄的表格對齊
                 pdf.setFontSize(14);
                 pdf.text(companyText, 13, 24); 
 
