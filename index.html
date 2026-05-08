@@ -44,7 +44,6 @@
     .pdf-section-title { font-size: 12pt; font-weight: bold; margin-top: 0.5cm; margin-bottom: 0.3cm; }
     .pdf-model-text { font-size: 10pt; font-weight: bold; margin-bottom: 0.2cm; }
 
-    /* 最美觀的 border-collapse 邊框設計 */
     .pdf-table { 
         width: 100%; 
         border-collapse: collapse; 
@@ -104,7 +103,7 @@
   <div class="controls">
     <input type="file" id="imgOutdoor" accept="image/*">
     <button class="btn-ocr" id="runOutdoorOcr">Extract Outdoor Data</button>
-    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機若在一張圖內可自動切割；若分開截圖，上傳第二張時會智能填補下一格！</span>
+    <span id="msgOutdoor" style="font-size:12px; color:#666;">雙拼機全局掃描：無論截圖包含幾部機組，系統皆會自動抓取並依序填滿空位。</span>
   </div>
   
   <div id="outdoorTablesContainer"></div>
@@ -144,6 +143,20 @@ window.onload = function() {
   window.toggleOtherTitle = function() {
     const type = document.getElementById('pTitleType').value;
     document.getElementById('pTitleOther').style.display = (type === 'Other') ? 'block' : 'none';
+  }
+
+  // 極限容錯的陣列萃取函數：自動修復小數點被拆開的問題 (如 24 . 7)
+  function getSafeMatches(text, regex) {
+      let matches = [];
+      let match;
+      regex.lastIndex = 0;
+      while ((match = regex.exec(text)) !== null) {
+          if (match[1]) {
+              let val = match[1].replace(/\s+/g, ''); // 移除數字中所有多餘空白
+              if (val !== '') matches.push(val);
+          }
+      }
+      return matches;
   }
 
   // ==========================================
@@ -186,7 +199,7 @@ window.onload = function() {
   }
   updateOutdoorModels();
 
-  // 室外機 OCR (全新智能區塊切割與容錯引擎)
+  // 室外機 OCR (全新全局掃描引擎)
   document.getElementById('runOutdoorOcr').onclick = async () => {
     try {
         const file = document.getElementById('imgOutdoor').files[0];
@@ -195,94 +208,62 @@ window.onload = function() {
         
         const { data: { text } } = await Tesseract.recognize(file, 'eng');
         
-        // 尋找分隔錨點 (尋找 63HS 或 TH4 的位置來判斷有幾台室外機)
-        let anchorIndices = [];
-        let match;
-        const anchorRegex = /63\s*H\s*[S5]/gi;
-        while ((match = anchorRegex.exec(text)) !== null) anchorIndices.push(match.index);
-
-        if (anchorIndices.length === 0) { // Fallback 到 63LS
-            const fallback1 = /63\s*L\s*[S5]/gi;
-            while ((match = fallback1.exec(text)) !== null) anchorIndices.push(match.index);
-        }
-        if (anchorIndices.length === 0) { // 再 Fallback 到 TH4
-            const fallback2 = /TH\s*[-_]?\s*4\s*[=:\-]/gi;
-            while ((match = fallback2.exec(text)) !== null) anchorIndices.push(match.index);
+        // 全局搜索：無視所有多餘空白、英文字母誤判，直接把整張圖片的所有數據抓成陣列
+        let hsMatches = getSafeMatches(text, /6\s*3\s*[Hh]\s*[S5s]\s*(?:1|I|l|\|)?\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
+        let lsMatches = getSafeMatches(text, /6\s*3\s*[Ll]\s*[S5s]\s*(?:1|I|l|\|)?\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
+        let th4Matches = getSafeMatches(text, /[T\+]\s*[Hh]\s*[-_]?\s*4\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
+        
+        // 頻率特別處理：優先尋找 Foc(Hz) 或 Fos(Hz)
+        let freqMatches = getSafeMatches(text, /F\s*[oO0]\s*[cCsS]\s*\(?\s*[Hh]\s*[zZ]\s*\)?\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
+        
+        // 如果找不到 Foc/Fos，退而求其次抓所有 F(Hz)
+        if(freqMatches.length === 0) {
+            freqMatches = getSafeMatches(text, /F\s*\(\s*[Hh]\s*[zZ]\s*\)\s*[=:\-]?\s*(\d+(?:\s*\.\s*\d+)?)/gi);
         }
 
-        // 把原始文字依照錨點切割成對應數量的 Chunk (區塊)
-        let chunks = [];
-        if (anchorIndices.length >= 2) {
-            let start = 0;
-            for (let i = 0; i < anchorIndices.length - 1; i++) {
-                let mid = Math.floor((anchorIndices[i] + anchorIndices[i+1]) / 2);
-                chunks.push(text.slice(start, mid));
-                start = mid;
-            }
-            chunks.push(text.slice(start)); // 剩下的放進最後一個 Chunk
-        } else {
-            chunks = [text]; // 只有一台，或者找不到錨點
-        }
+        let matchCount = Math.max(hsMatches.length, lsMatches.length, th4Matches.length, freqMatches.length);
 
-        // 針對每個獨立的區塊進行精準資料萃取 (使用高容錯 Regex)
-        let extractedData = chunks.map(chunk => {
-            const hsMatch = chunk.match(/63\s*H\s*[S5]\s*(?:1|I|l|\|)?\s*[=:\-]?\s*(\d+(?:\.\d+)?)/i);
-            const lsMatch = chunk.match(/63\s*L\s*[S5]\s*(?:1|I|l|\|)?\s*[=:\-]?\s*(\d+(?:\.\d+)?)/i);
-            const th4Match = chunk.match(/TH\s*[-_]?\s*4\s*[=:\-]?\s*(\d+(?:\.\d+)?)/i);
-
-            // 優先找 FOC 或 FOS，找不到再找 F(Hz)
-            let freqMatch = chunk.match(/F(?:OS|OC)\s*\(\s*Hz\s*\)\s*[=:\-]?\s*(\d+(?:\.\d+)?)/i);
-            if (!freqMatch) {
-                freqMatch = chunk.match(/(?:F\s*\(\s*Hz\s*\)|F\s*\/\s*Hz|Hz)\s*[=:\-]?\s*(\d+(?:\.\d+)?)/i);
-            }
-
-            return {
-                hs: hsMatch ? hsMatch[1] : '',
-                ls: lsMatch ? lsMatch[1] : '',
-                th4: th4Match ? th4Match[1] : '',
-                freq: freqMatch ? freqMatch[1] : ''
-            };
-        }).filter(data => data.hs || data.ls || data.th4 || data.freq); // 過濾掉完全空的誤判區塊
-
-        if (extractedData.length === 0) {
-            document.getElementById('msgOutdoor').innerText = "⚠️ 圖片因壓縮太模糊或格式不符，完全無法辨識。請直接手動輸入。";
+        if (matchCount === 0) {
+            document.getElementById('msgOutdoor').innerText = "⚠️ 圖片壓縮太模糊，完全無法辨識。請直接手動輸入。";
             return;
         }
 
-        // 智能填補邏輯 (Smart Fill)
         const qty = parseInt(document.getElementById('outQty').value);
-        let dataIndex = 0;
+        let targetUnits = [];
         
-        for(let i=1; i<=qty; i++) {
-            if (dataIndex >= extractedData.length) break;
-
-            let hsInput = document.getElementById(`out_hs_${i}`);
-            let lsInput = document.getElementById(`out_ls_${i}`);
-            let th4Input = document.getElementById(`out_th4_${i}`);
-            let freqInput = document.getElementById(`out_freq_${i}`);
-
-            // 判斷這個機組是不是原本就是空的
-            let isUnitEmpty = !hsInput.value && !lsInput.value && !th4Input.value && !freqInput.value;
-
-            // 如果圖片裡切出了多台機組 (一次覆蓋)，或者是這個格子剛好是空的 (分次截圖填補)
-            if (extractedData.length > 1 || isUnitEmpty) {
-                let d = extractedData[dataIndex];
-                if(d.hs) hsInput.value = d.hs;
-                if(d.ls) lsInput.value = d.ls;
-                if(d.th4) th4Input.value = d.th4;
-                if(d.freq) freqInput.value = d.freq;
-                dataIndex++;
+        // 智慧尋找：檢查目前網頁上哪些機組還是「空的」，優先填入空的機組
+        for (let i = 1; i <= qty; i++) {
+            let hs = document.getElementById(`out_hs_${i}`).value;
+            let ls = document.getElementById(`out_ls_${i}`).value;
+            let th4 = document.getElementById(`out_th4_${i}`).value;
+            let freq = document.getElementById(`out_freq_${i}`).value;
+            if (!hs && !ls && !th4 && !freq) {
+                targetUnits.push(i);
             }
         }
 
-        if (dataIndex > 0) {
-            if (extractedData.length > 1) {
-                document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已自動切割並精準填入 ${extractedData.length} 組機組資料。`;
-            } else {
-                document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已自動將單一資料填入空缺的機組格子中。`;
-            }
+        // 如果全部都已經填滿了，但使用者又重新上傳，就從頭開始覆蓋
+        if (targetUnits.length === 0) {
+            targetUnits = Array.from({length: qty}, (_, i) => i + 1);
+        }
+
+        // 依序將抓到的陣列資料，填入對應的空缺機組中
+        let matchIndex = 0;
+        for (let unitIdx of targetUnits) {
+            if (matchIndex >= matchCount) break;
+
+            if (hsMatches[matchIndex]) document.getElementById(`out_hs_${unitIdx}`).value = hsMatches[matchIndex];
+            if (lsMatches[matchIndex]) document.getElementById(`out_ls_${unitIdx}`).value = lsMatches[matchIndex];
+            if (th4Matches[matchIndex]) document.getElementById(`out_th4_${unitIdx}`).value = th4Matches[matchIndex];
+            if (freqMatches[matchIndex]) document.getElementById(`out_freq_${unitIdx}`).value = freqMatches[matchIndex];
+
+            matchIndex++;
+        }
+
+        if (matchCount > 1) {
+            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！成功從圖片中抓取 ${matchCount} 組數據並依序填入。`;
         } else {
-            document.getElementById('msgOutdoor').innerText = `✅ 辨識成功，但目前沒有空的機組可填入。`;
+            document.getElementById('msgOutdoor').innerText = `✅ 辨識完成！已自動將單一數據填入空缺欄位。`;
         }
 
     } catch (err) {
